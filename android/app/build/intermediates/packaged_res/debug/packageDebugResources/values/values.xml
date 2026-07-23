@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="punch_highlight">#D64545</color>
+    <color name="stryko_background">#EFEFEF</color>
+    <color name="stryko_blue">#2F3A66</color>
+    <color name="stryko_card">#FFFFFF</color>
+    <color name="stryko_red">#8B1A1A</color>
+    <color name="stryko_text_muted">#7A7A7A</color>
+    <string name="app_name">StryKO</string>
+    <style name="Theme.BoxingPerformanceTracker" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/stryko_background</item>
+        <item name="android:navigationBarColor">@color/stryko_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

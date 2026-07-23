@@ -1,0 +1,10 @@
+R_DEF: Internal format may change without notice
+local
+color punch_highlight
+color stryko_background
+color stryko_blue
+color stryko_card
+color stryko_red
+color stryko_text_muted
+string app_name
+style Theme.BoxingPerformanceTracker
