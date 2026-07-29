@@ -7,33 +7,27 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.Surface
+import com.breadler.boxingperformancetracker.ui.components.MainActionCard
+import com.breadler.boxingperformancetracker.ui.components.StrykoLogo
+import com.breadler.boxingperformancetracker.R
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBackground
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
-import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
+import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 
 @Composable
 fun HomeScreen(
+    onStartNewSession: () -> Unit,
     onViewPreviousSessions: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    StrykoSystemBars(statusBarColor = StrykoRed, navigationBarColor = StrykoRed)
+
     Surface(
         modifier = modifier.fillMaxSize(),
         color = StrykoBackground,
@@ -41,97 +35,33 @@ fun HomeScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 32.dp, vertical = 48.dp),
+                .padding(horizontal = 24.dp, vertical = 42.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Text(
-                text = "StryKO",
-                style = MaterialTheme.typography.headlineLarge,
-                color = StrykoRed,
-                textAlign = TextAlign.Center,
+            StrykoLogo()
+
+            Spacer(modifier = Modifier.height(44.dp))
+
+            MainActionCard(
+                title = "Start a New Session",
+                backgroundColor = StrykoRed,
+                iconTint = StrykoRed,
+                iconResId = R.drawable.ic_new_session,
+                onClick = onStartNewSession,
+                modifier = Modifier.fillMaxWidth(),
             )
 
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
-            HomeActionButton(
-                text = "Start a New Session",
-                containerColor = StrykoRed,
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = null,
-                        tint = StrykoRed,
-                        modifier = Modifier.size(28.dp),
-                    )
-                },
-                enabled = false,
-                onClick = {},
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            HomeActionButton(
-                text = "View Previous Sessions",
-                containerColor = StrykoBlue,
-                icon = {
-                    Icon(
-                        imageVector = Icons.Default.VideoLibrary,
-                        contentDescription = null,
-                        tint = StrykoBlue,
-                        modifier = Modifier.size(28.dp),
-                    )
-                },
-                enabled = true,
+            MainActionCard(
+                title = "View Previous Session",
+                backgroundColor = StrykoBlue,
+                iconTint = StrykoBlue,
+                iconResId = R.drawable.ic_previous_session,
                 onClick = onViewPreviousSessions,
+                modifier = Modifier.fillMaxWidth(),
             )
-        }
-    }
-}
-
-@Composable
-private fun HomeActionButton(
-    text: String,
-    containerColor: androidx.compose.ui.graphics.Color,
-    icon: @Composable () -> Unit,
-    enabled: Boolean,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(120.dp),
-        shape = RoundedCornerShape(50),
-        colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            disabledContainerColor = containerColor.copy(alpha = 0.55f),
-        ),
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(
-                text = text,
-                color = StrykoCard,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center,
-            )
-            Surface(
-                shape = RoundedCornerShape(50),
-                color = StrykoCard,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    icon()
-                }
-            }
         }
     }
 }

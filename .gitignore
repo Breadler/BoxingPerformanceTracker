@@ -1,0 +1,28 @@
+# Android build artifacts
+**/build/
+.gradle/
+Captures/
+
+# Local configuration
+local.properties
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+.idea/dictionaries/
+.idea/libraries/
+*.iml
+
+# Keystores and Secrets
+*.jks
+*.keystore
+google-services.json
+
+# Environment and Tools
+.venv/
+.agents/
+.artifacts/
+python/__pycache__/
+
+# OS specific
+.DS_Store
+Thumbs.db

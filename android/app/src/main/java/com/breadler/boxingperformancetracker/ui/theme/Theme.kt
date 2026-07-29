@@ -38,6 +38,12 @@ fun BoxingPerformanceTrackerTheme(content: @Composable () -> Unit) {
                 fontWeight = FontWeight.Bold,
                 fontSize = 18.sp,
             ),
+            bodyLarge = TextStyle(
+                fontSize = 16.sp,
+            ),
+            bodyMedium = TextStyle(
+                fontSize = 14.sp,
+            ),
         ),
         content = content,
     )
