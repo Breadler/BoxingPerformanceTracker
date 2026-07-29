@@ -16,5 +16,6 @@ drawable ic_play
 drawable ic_plus
 drawable ic_previous_session
 drawable ic_view
+font playfair_display
 string app_name
 style Theme.BoxingPerformanceTracker

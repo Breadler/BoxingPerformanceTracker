@@ -53,10 +53,17 @@ fun SessionViewScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val videoUri = remember(session.videoPath) {
-        session.videoPath?.let { videoPath ->
-            val file = File(videoPath)
-            if (file.exists()) Uri.fromFile(file) else null
+    val videoUri = remember(session.annotatedVideoUri, session.sourceVideoUri, session.videoPath) {
+        val uriString = session.annotatedVideoUri.takeIf { !it.isNullOrBlank() }
+            ?: session.sourceVideoUri.takeIf { !it.isNullOrBlank() }
+            ?: session.videoPath.takeIf { !it.isNullOrBlank() }
+
+        uriString?.let { str ->
+            if (str.startsWith("/") || !str.contains("://")) {
+                Uri.fromFile(File(str))
+            } else {
+                Uri.parse(str)
+            }
         }
     }
 
@@ -115,7 +122,7 @@ fun SessionViewScreen(
                     text = session.title,
                     style = MaterialTheme.typography.titleLarge,
                     color = StrykoRed,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                 )
                 Spacer(modifier = Modifier.size(48.dp))
             }
@@ -149,7 +156,7 @@ fun SessionViewScreen(
                 text = "Timeline",
                 style = MaterialTheme.typography.titleMedium,
                 color = StrykoBlue,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
             )
 
             TimelineControls(

@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.breadler.boxingperformancetracker.app-mergeDebugResources-64:/values-watch-v20/values-watch-v20.xml",
+            "outputFile": "com.breadler.boxingperformancetracker.app-mergeDebugResources-70:/values-watch-v20/values-watch-v20.xml",
             "map": [
                 {
                     "source": "C:\\Users\\User\\.gradle\\caches\\8.14.5\\transforms\\bad4211c7dc9ab962687746c7d58cecb\\transformed\\appcompat-1.7.0\\res\\values-watch-v20\\values-watch-v20.xml",

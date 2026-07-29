@@ -125,7 +125,7 @@ private fun SessionCard(
                     text = session.title,
                     color = StrykoBlue,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                 )
                 Text(
                     text = session.durationLabel,

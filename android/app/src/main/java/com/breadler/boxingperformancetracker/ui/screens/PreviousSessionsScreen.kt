@@ -19,9 +19,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.breadler.boxingperformancetracker.model.BoxingSession
+import com.breadler.boxingperformancetracker.data.SessionSummary
 import com.breadler.boxingperformancetracker.ui.components.SessionCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBackground
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
@@ -29,7 +28,7 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 
 @Composable
 fun PreviousSessionsScreen(
-    sessions: List<BoxingSession>,
+    sessions: List<SessionSummary>,
     onExit: () -> Unit,
     onOpenSession: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -45,19 +44,24 @@ fun PreviousSessionsScreen(
                 .fillMaxSize()
                 .padding(horizontal = 20.dp, vertical = 16.dp),
         ) {
-            RowHeader(
-                title = "Previous Sessions",
-                onBack = onExit,
-            )
+            RowHeader(onBack = onExit)
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                items(sessions, key = { it.id }) { session ->
-                    SessionCard(
-                        session = session,
-                        onPlay = { onOpenSession(session.id) },
-                    )
+            if (sessions.isEmpty()) {
+                Text(
+                    text = "Processed sessions will appear here after import completes.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = StrykoBlue,
+                )
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    items(sessions, key = { it.id }) { session ->
+                        SessionCard(
+                            session = session,
+                            onPlay = { onOpenSession(session.id) },
+                        )
+                    }
                 }
             }
         }
@@ -66,7 +70,6 @@ fun PreviousSessionsScreen(
 
 @Composable
 private fun RowHeader(
-    title: String,
     onBack: () -> Unit,
 ) {
     androidx.compose.foundation.layout.Row(
@@ -76,11 +79,5 @@ private fun RowHeader(
         IconButton(onClick = onBack) {
             Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back", tint = StrykoBlue)
         }
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleLarge,
-            color = StrykoBlue,
-            fontWeight = FontWeight.Bold,
-        )
     }
 }

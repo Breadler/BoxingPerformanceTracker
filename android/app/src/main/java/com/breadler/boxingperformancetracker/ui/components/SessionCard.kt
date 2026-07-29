@@ -26,15 +26,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.breadler.boxingperformancetracker.model.BoxingSession
+import com.breadler.boxingperformancetracker.data.SessionCardItem
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
-import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
 
 @Composable
 fun SessionCard(
-    session: BoxingSession,
+    session: SessionCardItem,
     onPlay: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -71,7 +70,7 @@ fun SessionCard(
                     text = session.title,
                     style = MaterialTheme.typography.titleMedium,
                     color = StrykoBlue,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.ExtraBold,
                 )
                 Text(
                     text = session.durationLabel,

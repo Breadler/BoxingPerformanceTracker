@@ -1,7 +1,7 @@
 {
     "logs": [
         {
-            "outputFile": "com.breadler.boxingperformancetracker.app-mergeDebugResources-64:/values-kn/values-kn.xml",
+            "outputFile": "com.breadler.boxingperformancetracker.app-mergeDebugResources-70:/values-kn/values-kn.xml",
             "map": [
                 {
                     "source": "C:\\Users\\User\\.gradle\\caches\\8.14.5\\transforms\\7ac45b1648e0fde2aabe3ebed50ef90f\\transformed\\material3-release\\res\\values-kn\\values-kn.xml",

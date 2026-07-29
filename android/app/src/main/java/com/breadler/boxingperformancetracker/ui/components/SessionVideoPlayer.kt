@@ -11,7 +11,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -19,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
@@ -38,6 +42,7 @@ fun SessionVideoPlayer(
             repeatMode = Player.REPEAT_MODE_OFF
         }
     }
+    var playbackError by remember { mutableStateOf<String?>(null) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -50,10 +55,20 @@ fun SessionVideoPlayer(
             exoPlayer.stop()
             exoPlayer.clearMediaItems()
             onDurationLoaded(0L)
+            playbackError = null
             return@LaunchedEffect
         }
 
+        if (videoUri.scheme == "file") {
+            val file = java.io.File(videoUri.path ?: "")
+            if (!file.exists()) {
+                playbackError = "Video file not found at local path."
+                return@LaunchedEffect
+            }
+        }
+
         exoPlayer.setMediaItem(MediaItem.fromUri(videoUri))
+        playbackError = null
         exoPlayer.prepare()
     }
 
@@ -84,6 +99,10 @@ fun SessionVideoPlayer(
                     onDurationLoaded(exoPlayer.duration.coerceAtLeast(0L))
                 }
             }
+
+            override fun onPlayerError(error: PlaybackException) {
+                playbackError = error.message ?: "This video could not be played."
+            }
         }
         exoPlayer.addListener(listener)
         onDispose {
@@ -92,10 +111,10 @@ fun SessionVideoPlayer(
     }
 
     LaunchedEffect(exoPlayer, isPlaying, videoUri) {
-        if (videoUri == null) {
+        if (videoUri == null || !isPlaying) {
             return@LaunchedEffect
         }
-        while (true) {
+        while (isPlaying) {
             onPositionUpdate(exoPlayer.currentPosition.coerceAtLeast(0L))
             if (exoPlayer.playbackState == Player.STATE_ENDED) {
                 exoPlayer.pause()
@@ -109,7 +128,13 @@ fun SessionVideoPlayer(
         modifier = modifier.background(Color.Black),
         contentAlignment = Alignment.Center,
     ) {
-        if (videoUri == null) {
+        if (playbackError != null) {
+            Text(
+                text = playbackError ?: "This video could not be played.",
+                color = Color.White.copy(alpha = 0.82f),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        } else if (videoUri == null) {
             Text(
                 text = "Annotated video replay",
                 color = Color.White.copy(alpha = 0.7f),

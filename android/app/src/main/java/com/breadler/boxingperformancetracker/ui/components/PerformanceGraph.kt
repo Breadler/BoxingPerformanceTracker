@@ -3,6 +3,8 @@ package com.breadler.boxingperformancetracker.ui.components
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,7 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -25,12 +26,15 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.breadler.boxingperformancetracker.R
+import com.breadler.boxingperformancetracker.data.PerformancePoint
 import com.breadler.boxingperformancetracker.data.PunchWindow
 import com.breadler.boxingperformancetracker.ui.theme.GraphBlue
 import com.breadler.boxingperformancetracker.ui.theme.GraphGreen
@@ -38,20 +42,36 @@ import com.breadler.boxingperformancetracker.ui.theme.PunchHighlight
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
-import kotlin.math.PI
-import kotlin.math.sin
 
 @Composable
 fun PerformanceGraph(
     durationMs: Long,
     currentPositionMs: Long,
     punchWindows: List<PunchWindow>,
-    isPlaying: Boolean,
-    onTogglePlayback: () -> Unit,
+    performancePoints: List<PerformancePoint>,
+    onScrub: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val safeDuration = durationMs.coerceAtLeast(1L)
-    val series = remember(safeDuration) { buildSeries(points = 120) }
+    val series = remember(performancePoints, safeDuration) {
+        if (performancePoints.isEmpty()) {
+            // No fabricated data: a flat zero line across the real duration is an honest
+            // "no predictions were produced" state, not a fake-looking curve.
+            GraphSeries(
+                punchVolume = listOf(0f, 0f),
+                guardHeight = listOf(0f, 0f),
+                movement = listOf(0f, 0f),
+                timestamps = listOf(0L, safeDuration),
+            )
+        } else {
+            GraphSeries(
+                punchVolume = performancePoints.map { it.punchVolume.toFloat() },
+                guardHeight = performancePoints.map { it.guardScore.toFloat() },
+                movement = performancePoints.map { it.movementScore.toFloat() },
+                timestamps = performancePoints.map { it.timestampMs.coerceIn(0L, safeDuration) },
+            )
+        }
+    }
 
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -69,10 +89,39 @@ fun PerformanceGraph(
                 LegendSwatch(color = GraphGreen, label = "movement")
             }
 
+            if (performancePoints.isEmpty()) {
+                Text(
+                    text = "No punch data available for this session",
+                    color = StrykoBlue,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+
             Canvas(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(185.dp),
+                    .height(185.dp)
+                    .pointerInput(safeDuration) {
+                        val chartLeft = 12f
+                        fun scrubTo(x: Float) {
+                            val chartWidth = (size.width - 2 * chartLeft).coerceAtLeast(1f)
+                            val fraction = ((x - chartLeft) / chartWidth).coerceIn(0f, 1f)
+                            onScrub((fraction * safeDuration).toLong())
+                        }
+                        awaitEachGesture {
+                            val down = awaitFirstDown(requireUnconsumed = false)
+                            scrubTo(down.position.x)
+                            val pointerId = down.id
+                            while (true) {
+                                val event = awaitPointerEvent()
+                                val change = event.changes.firstOrNull { it.id == pointerId } ?: break
+                                if (!change.pressed) break
+                                scrubTo(change.position.x)
+                                change.consume()
+                            }
+                        }
+                    },
             ) {
                 val chartLeft = 12f
                 val chartRight = size.width - 12f
@@ -91,32 +140,44 @@ fun PerformanceGraph(
                     return chartBottom - (chartHeight * normalized)
                 }
 
+                // Punch volume is drawn compressed into the middle half of the chart:
+                // 0 sits at the 1/4-height mark, 1 sits at the 3/4-height mark.
+                fun yForPunchVolume(value: Float): Float {
+                    val normalized = value.coerceIn(0f, 1f)
+                    val zeroY = chartBottom - chartHeight * 0.25f
+                    val oneY = chartBottom - chartHeight * 0.75f
+                    return zeroY + (oneY - zeroY) * normalized
+                }
+
                 drawSeries(
-                    values = series.guardHeight,
+                    points = series.timestamps.zip(series.guardHeight),
                     fillColor = GraphBlue.copy(alpha = 0.12f),
                     lineColor = GraphBlue,
                     chartLeft = chartLeft,
                     chartBottom = chartBottom,
                     chartWidth = chartWidth,
+                    durationMs = safeDuration,
                     yForValue = ::yForValue,
                 )
                 drawSeries(
-                    values = series.movement,
+                    points = series.timestamps.zip(series.movement),
                     fillColor = GraphGreen.copy(alpha = 0.12f),
                     lineColor = GraphGreen,
                     chartLeft = chartLeft,
                     chartBottom = chartBottom,
                     chartWidth = chartWidth,
+                    durationMs = safeDuration,
                     yForValue = ::yForValue,
                 )
                 drawSeries(
-                    values = series.punchVolume,
+                    points = series.timestamps.zip(series.punchVolume),
                     fillColor = PunchHighlight.copy(alpha = 0.10f),
                     lineColor = PunchHighlight,
                     chartLeft = chartLeft,
                     chartBottom = chartBottom,
                     chartWidth = chartWidth,
-                    yForValue = ::yForValue,
+                    durationMs = safeDuration,
+                    yForValue = ::yForPunchVolume,
                 )
 
                 punchWindows.forEach { window ->
@@ -136,34 +197,12 @@ fun PerformanceGraph(
                     strokeWidth = 2.5f,
                 )
 
-                drawTimeLabel(
-                    label = formatTimeLabel(currentPositionMs),
+                val punchesSoFar = punchWindows.count { it.startMs <= currentPositionMs.coerceIn(0L, safeDuration) }
+                drawCountLabel(
+                    count = punchesSoFar,
                     x = playheadX,
                     y = 6f,
                 )
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                listOf("0:00", "0:10", "0:20", "0:30", "0:40", "1:00").forEach { label ->
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = StrykoTextMuted,
-                    )
-                }
-            }
-
-            Surface(
-                onClick = onTogglePlayback,
-                shape = RoundedCornerShape(50.dp),
-                color = StrykoCard,
-                border = androidx.compose.foundation.BorderStroke(1.5.dp, StrykoBlue),
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) {
-                BoxedPlaybackIcon(isPlaying = isPlaying)
             }
         }
     }
@@ -180,82 +219,88 @@ private fun LegendSwatch(
     }
 }
 
-@Composable
-private fun BoxedPlaybackIcon(isPlaying: Boolean) {
-    androidx.compose.foundation.layout.Box(
-        modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
-            contentDescription = if (isPlaying) "Pause" else "Play",
-            tint = StrykoBlue,
-        )
-    }
-}
-
 private fun DrawScope.drawSeries(
-    values: List<Float>,
+    points: List<Pair<Long, Float>>,
     fillColor: Color,
     lineColor: Color,
     chartLeft: Float,
     chartBottom: Float,
     chartWidth: Float,
+    durationMs: Long,
     yForValue: (Float) -> Float,
 ) {
-    if (values.size < 2) return
+    if (points.size < 2) return
 
-    val linePath = Path()
-    val fillPath = Path()
+    val pixelPoints = points.map { (timeMs, value) ->
+        val fraction = (timeMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+        Offset(chartLeft + (chartWidth * fraction), yForValue(value))
+    }
 
-    values.forEachIndexed { index, value ->
-        val x = chartLeft + (chartWidth * index / values.lastIndex.coerceAtLeast(1))
-        val y = yForValue(value)
-        if (index == 0) {
-            linePath.moveTo(x, y)
-            fillPath.moveTo(x, chartBottom)
-            fillPath.lineTo(x, y)
-        } else {
-            linePath.lineTo(x, y)
-            fillPath.lineTo(x, y)
-        }
-        if (index == values.lastIndex) {
-            fillPath.lineTo(x, chartBottom)
-            fillPath.close()
-        }
+    val linePath = buildSmoothPath(pixelPoints)
+    val fillPath = Path().apply {
+        addPath(linePath)
+        lineTo(pixelPoints.last().x, chartBottom)
+        lineTo(pixelPoints.first().x, chartBottom)
+        close()
     }
 
     drawPath(path = fillPath, color = fillColor)
-    drawPath(path = linePath, color = lineColor, style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f))
+    drawPath(
+        path = linePath,
+        color = lineColor,
+        style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round),
+    )
 }
 
-private fun DrawScope.drawTimeLabel(
-    label: String,
+/** Catmull-Rom spline through [pixelPoints], converted to cubic Bezier segments, so
+ * even sharp punch on/off transitions render as the smooth curve seen in the design
+ * rather than a jagged straight-line zigzag. Still passes exactly through every point. */
+private fun buildSmoothPath(pixelPoints: List<Offset>): Path {
+    val path = Path()
+    if (pixelPoints.isEmpty()) return path
+    path.moveTo(pixelPoints.first().x, pixelPoints.first().y)
+    if (pixelPoints.size < 3) {
+        pixelPoints.drop(1).forEach { path.lineTo(it.x, it.y) }
+        return path
+    }
+
+    for (i in 0 until pixelPoints.size - 1) {
+        val p0 = pixelPoints[(i - 1).coerceAtLeast(0)]
+        val p1 = pixelPoints[i]
+        val p2 = pixelPoints[i + 1]
+        val p3 = pixelPoints[(i + 2).coerceAtMost(pixelPoints.size - 1)]
+        val control1 = Offset(p1.x + (p2.x - p0.x) / 6f, p1.y + (p2.y - p0.y) / 6f)
+        val control2 = Offset(p2.x - (p3.x - p1.x) / 6f, p2.y - (p3.y - p1.y) / 6f)
+        path.cubicTo(control1.x, control1.y, control2.x, control2.y, p2.x, p2.y)
+    }
+    return path
+}
+
+/** Circular badge on the playhead showing the punch count reached by [x]'s timestamp. */
+private fun DrawScope.drawCountLabel(
+    count: Int,
     x: Float,
     y: Float,
 ) {
+    val label = count.toString()
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = PunchHighlight.toArgb()
-        textSize = 30f
+        color = android.graphics.Color.WHITE
+        textSize = 28f
         typeface = Typeface.DEFAULT_BOLD
         textAlign = Paint.Align.CENTER
     }
 
-    val textWidth = paint.measureText(label)
-    val bubbleWidth = textWidth + 24f
-    val bubbleHeight = 38f
-    val left = (x - bubbleWidth / 2f).coerceAtLeast(0f)
-    val right = left + bubbleWidth
-    drawRoundRect(
+    val radius = 22f
+    val center = Offset(x.coerceAtLeast(radius), y + radius)
+    drawCircle(
         color = PunchHighlight.copy(alpha = 0.95f),
-        topLeft = Offset(left, y),
-        size = Size(bubbleWidth, bubbleHeight),
-        cornerRadius = androidx.compose.ui.geometry.CornerRadius(12f, 12f),
+        radius = radius,
+        center = center,
     )
     drawContext.canvas.nativeCanvas.drawText(
         label,
-        left + bubbleWidth / 2f,
-        y + 24f,
+        center.x,
+        center.y + 10f,
         paint,
     )
 }
@@ -264,28 +309,5 @@ private data class GraphSeries(
     val punchVolume: List<Float>,
     val guardHeight: List<Float>,
     val movement: List<Float>,
+    val timestamps: List<Long>,
 )
-
-private fun buildSeries(points: Int): GraphSeries {
-    return GraphSeries(
-        punchVolume = List(points) { index ->
-            val phase = index.toFloat() / points.toFloat()
-            (0.26f + 0.12f * sin(phase * 10f * PI.toFloat()) + 0.05f * sin(phase * 25f * PI.toFloat())).coerceIn(0f, 1f)
-        },
-        guardHeight = List(points) { index ->
-            val phase = index.toFloat() / points.toFloat()
-            (0.58f + 0.08f * sin(phase * 5f * PI.toFloat() + 0.2f)).coerceIn(0f, 1f)
-        },
-        movement = List(points) { index ->
-            val phase = index.toFloat() / points.toFloat()
-            (0.40f + 0.10f * sin(phase * 6f * PI.toFloat() + 0.8f)).coerceIn(0f, 1f)
-        },
-    )
-}
-
-private fun formatTimeLabel(timeMs: Long): String {
-    val totalSeconds = (timeMs / 1000).coerceAtLeast(0)
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
-}

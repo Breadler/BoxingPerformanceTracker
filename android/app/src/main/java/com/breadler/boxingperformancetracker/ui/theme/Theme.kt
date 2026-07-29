@@ -26,16 +26,16 @@ fun BoxingPerformanceTrackerTheme(content: @Composable () -> Unit) {
         typography = MaterialTheme.typography.copy(
             headlineLarge = TextStyle(
                 fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 fontSize = 42.sp,
             ),
             titleLarge = TextStyle(
                 fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 fontSize = 28.sp,
             ),
             titleMedium = TextStyle(
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.ExtraBold,
                 fontSize = 18.sp,
             ),
             bodyLarge = TextStyle(
