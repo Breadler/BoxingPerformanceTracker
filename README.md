@@ -100,6 +100,23 @@ python build_training_csv.py --pose-frames data/pose_frames.csv --punch-windows 
 python train_random_forest.py --input data/training.csv --output models/random_forest.joblib
 ```
 
+## Export the on-device Android model
+
+The Android app runs imports locally. It expects:
+
+- `android/app/src/main/assets/pose_landmarker_lite.task`
+- `android/app/src/main/assets/punch_model.tflite`
+- `android/app/src/main/assets/punch_model_metadata.json`
+
+The pose model is checked into the Android assets folder. Generate the punch classifier after building `data/training.csv`:
+
+```bash
+cd python
+python train_tflite_punch_model.py --training-csv data/training.csv
+```
+
+This trains a small TensorFlow model from the same engineered motion features and writes the `.tflite` model plus feature metadata directly into the Android assets folder.
+
 The pipeline is time-aware. `pose_frames.csv` stores `timestamp_ms`, and frame-based punch labels are converted into milliseconds before training windows are built. Keep the same `--window-ms` value when running `predict_punches.py`, because prediction windows must cover the same duration as training windows even when video frame rates differ.
 
 By default, fixed-size positive windows are end-anchored so the labeled punch end pose (impact/contact frame) is preserved while the start can shift as needed. Use `--positive-anchor center` if you want midpoint anchoring instead. Use `--use-full-punch-window` if you want each positive row to keep the full labeled start/end range.

@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from pose_extractor import process_video
+from session_processing import process_video
 
 
 def default_output_path(video_path: Path) -> Path:
@@ -54,12 +54,12 @@ def main() -> None:
     output_path = args.output or default_output_path(args.video)
     process_video(
         args.video,
-        output_path,
+        output_path.parent,
+        pose_frames_output_path=output_path,
         write_annotated=args.write_annotated,
         frame_stride=args.frame_stride,
         model_path=args.model,
         landmark_set=args.landmark_set,
-        write_header=True,
     )
     print(f"User pose frames ready for punch prediction: {output_path}")
 
