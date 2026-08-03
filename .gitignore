@@ -19,9 +19,19 @@ google-services.json
 
 # Environment and Tools
 .venv/
+python/.venv*/
 .agents/
 .artifacts/
 python/__pycache__/
+**/__pycache__/
+
+# Large regenerated pipeline outputs (rerun pose_extractor.py / extract_user_pose_frames.py /
+# predict_punches.py to reproduce). Hand-labeled and small reference CSVs stay tracked:
+# punch_windows.csv, training.csv, predicted_punch_windows.csv.
+python/data/pose_frames.csv
+python/data/user_pose_frames.csv
+python/data/user_window_predictions.csv
+python/data/*.png
 
 # OS specific
 .DS_Store

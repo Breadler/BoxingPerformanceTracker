@@ -79,15 +79,8 @@ async def process_session(
         }
         for row in prediction_windows.itertuples(index=False)
     ]
-    response["performancePoints"] = [
-        {
-            "timestampMs": point.timestamp_ms,
-            "punchProbability": point.punch_probability,
-            "guardScore": point.guard_score,
-            "movementScore": point.movement_score,
-        }
-        for point in result.performance_points
-    ]
+    # performancePoints (punchVolume/guardHeight/movement) already comes from
+    # result.to_response() via asdict() on the current PerformancePoint fields.
     return response
 
 

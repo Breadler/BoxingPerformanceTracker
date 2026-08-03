@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import pandas as pd
 
+from graph_metrics import compute_graph_metrics
 from predict_punches import predict_punches
 from pose_extractor import (
     BOXING_LANDMARK_INDICES,
@@ -39,9 +40,9 @@ BOXING_CONNECTIONS = (
 @dataclass(slots=True)
 class PerformancePoint:
     timestamp_ms: int
-    punch_probability: float
-    guard_score: float
-    movement_score: float
+    punch_volume: int
+    guard_height: float
+    movement: float
 
 
 @dataclass(slots=True)
@@ -229,76 +230,6 @@ def extract_frame_observations(
         raise ValueError(f"Could not determine video dimensions for: {video_path}")
 
     return observations, fps, (width, height)
-
-
-def _normalize_score(value: float, *, scale: float) -> float:
-    if not np.isfinite(value):
-        return 0.0
-    return float(np.clip(value / scale, 0.0, 1.0))
-
-
-def _extract_numeric(row: pd.Series, candidates: tuple[str, ...], *, default: float = 0.0) -> float:
-    for candidate in candidates:
-        value = row.get(candidate)
-        if value is not None and pd.notna(value):
-            try:
-                return float(value)
-            except (TypeError, ValueError):
-                continue
-    return default
-
-
-def build_performance_points(prediction_windows: pd.DataFrame) -> list[PerformancePoint]:
-    points: list[PerformancePoint] = []
-    if prediction_windows.empty:
-        return points
-
-    for row in prediction_windows.itertuples(index=False):
-        row_series = pd.Series(row._asdict())
-        punch_probability = float(
-            row_series.get("punch_probability", 1.0 if row_series.get("prediction") == "punch" else 0.0)
-        )
-        movement_score = _normalize_score(
-            max(
-                _extract_numeric(
-                    row_series,
-                    (
-                        "left_wrist_velocity_max",
-                        "right_wrist_velocity_max",
-                        "left_elbow_velocity_max",
-                        "right_elbow_velocity_max",
-                    ),
-                ),
-                _extract_numeric(
-                    row_series,
-                    (
-                        "left_wrist_velocity_mean",
-                        "right_wrist_velocity_mean",
-                        "left_elbow_velocity_mean",
-                        "right_elbow_velocity_mean",
-                    ),
-                ),
-            ),
-            scale=0.3,
-        )
-        guard_distance = max(
-            _extract_numeric(row_series, ("left_shoulder_to_wrist_distance_change",)),
-            _extract_numeric(row_series, ("right_shoulder_to_wrist_distance_change",)),
-            _extract_numeric(row_series, ("left_wrist_forward_extension_change",)),
-            _extract_numeric(row_series, ("right_wrist_forward_extension_change",)),
-        )
-        guard_score = float(np.clip(1.0 - abs(guard_distance) / 0.45, 0.0, 1.0))
-        timestamp_ms = int(row_series.get("end_ms", row_series.get("center_ms", 0)))
-        points.append(
-            PerformancePoint(
-                timestamp_ms=timestamp_ms,
-                punch_probability=float(np.clip(punch_probability, 0.0, 1.0)),
-                guard_score=guard_score,
-                movement_score=movement_score,
-            )
-        )
-
-    return points
 
 
 def merge_prediction_windows(prediction_windows: pd.DataFrame) -> pd.DataFrame:
@@ -490,6 +421,7 @@ def process_video(
     window_ms: int = 250,
     stride_ms: int = 40,
     frame_stride: int = 1,
+    combo_gap_ms: int = 500,
 ) -> ProcessingResult:
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
@@ -541,7 +473,22 @@ def process_video(
         for row in punch_windows_df.itertuples(index=False)
     ]
 
-    performance_points = build_performance_points(prediction_windows)
+    graph_metrics = compute_graph_metrics(
+        pose_frames,
+        punch_windows_df.assign(video_id=session_id),
+        window_ms=window_ms,
+        stride_ms=stride_ms,
+        combo_gap_ms=combo_gap_ms,
+    )
+    performance_points = [
+        PerformancePoint(
+            timestamp_ms=int(row.center_ms),
+            punch_volume=int(row.punch_volume),
+            guard_height=float(row.guard_height),
+            movement=float(row.movement),
+        )
+        for row in graph_metrics.itertuples(index=False)
+    ]
     annotated_path = session_dir / f"{video_path.stem}_annotated.mp4"
     if write_annotated:
         write_annotated_video(video_path, observations, punch_windows, annotated_path, fps)
