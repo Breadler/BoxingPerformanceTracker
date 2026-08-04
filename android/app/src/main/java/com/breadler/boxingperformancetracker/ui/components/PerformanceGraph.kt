@@ -3,6 +3,7 @@ package com.breadler.boxingperformancetracker.ui.components
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
@@ -19,11 +20,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -36,12 +40,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.breadler.boxingperformancetracker.data.PerformancePoint
 import com.breadler.boxingperformancetracker.data.PunchWindow
+import com.breadler.boxingperformancetracker.data.processing.GraphMetrics
 import com.breadler.boxingperformancetracker.ui.theme.GraphBlue
 import com.breadler.boxingperformancetracker.ui.theme.GraphGreen
 import com.breadler.boxingperformancetracker.ui.theme.PunchHighlight
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
+import kotlin.math.roundToInt
+
+private const val DIMMED_ALPHA = 0.18f
+private const val LEGEND_DIMMED_ALPHA = 0.4f
+
+private enum class GraphMetric { PUNCH_VOLUME, GUARD_HEIGHT, MOVEMENT }
 
 @Composable
 fun PerformanceGraph(
@@ -53,24 +64,51 @@ fun PerformanceGraph(
     modifier: Modifier = Modifier,
 ) {
     val safeDuration = durationMs.coerceAtLeast(1L)
-    val series = remember(performancePoints, safeDuration) {
+    var selectedMetric by remember(performancePoints) { mutableStateOf<GraphMetric?>(null) }
+
+    val guardMovementSeries = remember(performancePoints, safeDuration) {
         if (performancePoints.isEmpty()) {
             // No fabricated data: a flat zero line across the real duration is an honest
             // "no predictions were produced" state, not a fake-looking curve.
-            GraphSeries(
-                punchVolume = listOf(0f, 0f),
+            GuardMovementSeries(
                 guardHeight = listOf(0f, 0f),
                 movement = listOf(0f, 0f),
                 timestamps = listOf(0L, safeDuration),
             )
         } else {
-            GraphSeries(
-                punchVolume = performancePoints.map { it.punchVolume.toFloat() },
-                guardHeight = performancePoints.map { it.guardScore.toFloat() },
-                movement = performancePoints.map { it.movementScore.toFloat() },
-                timestamps = performancePoints.map { it.timestampMs.coerceIn(0L, safeDuration) },
+            // Mirrors graph_metrics.py's compute -> smooth -> downsample pipeline: the
+            // stored points are raw/exact, this is purely a display-time pass. Each series
+            // is min-max normalized to 0..1 here; the Canvas draw step below maps that
+            // into its own staggered band rather than one shared full-height axis.
+            val sorted = performancePoints.sortedBy { it.timestampMs }
+            val inferredStrideMs = sorted.zipWithNext()
+                .map { (a, b) -> b.timestampMs - a.timestampMs }
+                .filter { it > 0 }
+                .minOrNull() ?: 40L
+
+            val smoothed = GraphMetrics.smoothPerformancePoints(sorted, strideMs = inferredStrideMs)
+            val displayPoints = GraphMetrics.downsamplePerformancePoints(smoothed)
+
+            GuardMovementSeries(
+                guardHeight = normalizeToUnitRange(displayPoints.map { it.guardHeight }),
+                movement = normalizeToUnitRange(displayPoints.map { it.movement }),
+                timestamps = displayPoints.map { it.timestampMs.coerceIn(0L, safeDuration) },
             )
         }
+    }
+
+    val punchVolumeSeries = remember(punchWindows, safeDuration) {
+        // Sparse, one point per punch (running count within its combo) plus a 0
+        // right before/after each combo, not smoothed/downsampled on this data
+        // itself - the curve drawn through these points is purely a display-time
+        // rounding, not averaging. Mirrors plot_graph_metrics.py's punch volume
+        // view, not the uniform grid.
+        val keyframes = GraphMetrics.computePunchVolumeKeyframes(punchWindows, safeDuration)
+        PunchVolumeSeries(
+            punchVolume = normalizeToUnitRange(keyframes.map { it.punchVolume.toDouble() }),
+            rawPunchVolume = keyframes.map { it.punchVolume },
+            timestamps = keyframes.map { it.timestampMs.coerceIn(0L, safeDuration) },
+        )
     }
 
     Card(
@@ -84,9 +122,30 @@ fun PerformanceGraph(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                LegendSwatch(color = PunchHighlight, label = "punch volume")
-                LegendSwatch(color = GraphBlue, label = "guard height")
-                LegendSwatch(color = GraphGreen, label = "movement")
+                LegendSwatch(
+                    color = PunchHighlight,
+                    label = "punch volume",
+                    isDimmed = selectedMetric != null && selectedMetric != GraphMetric.PUNCH_VOLUME,
+                    onClick = {
+                        selectedMetric = if (selectedMetric == GraphMetric.PUNCH_VOLUME) null else GraphMetric.PUNCH_VOLUME
+                    },
+                )
+                LegendSwatch(
+                    color = GraphBlue,
+                    label = "guard height",
+                    isDimmed = selectedMetric != null && selectedMetric != GraphMetric.GUARD_HEIGHT,
+                    onClick = {
+                        selectedMetric = if (selectedMetric == GraphMetric.GUARD_HEIGHT) null else GraphMetric.GUARD_HEIGHT
+                    },
+                )
+                LegendSwatch(
+                    color = GraphGreen,
+                    label = "movement",
+                    isDimmed = selectedMetric != null && selectedMetric != GraphMetric.MOVEMENT,
+                    onClick = {
+                        selectedMetric = if (selectedMetric == GraphMetric.MOVEMENT) null else GraphMetric.MOVEMENT
+                    },
+                )
             }
 
             if (performancePoints.isEmpty()) {
@@ -135,58 +194,72 @@ fun PerformanceGraph(
                     return chartLeft + chartWidth * fraction
                 }
 
-                fun yForValue(value: Float): Float {
+                // Each series' line is staggered into its own half-height band so they
+                // overlap in a cascade rather than sharing one full-height axis: punch
+                // volume in the top half (0/4-2/4), guard height in the middle half
+                // (1/4-3/4), movement in the bottom half (2/4-4/4). The fill under each
+                // line still drops all the way to the shared chart bottom, though - only
+                // the lines themselves are staggered, not the fills.
+                fun yForBand(value: Float, bandTopFraction: Float, bandBottomFraction: Float): Float {
                     val normalized = value.coerceIn(0f, 1f)
-                    return chartBottom - (chartHeight * normalized)
+                    val topY = chartTop + chartHeight * bandTopFraction
+                    val bottomY = chartTop + chartHeight * bandBottomFraction
+                    return bottomY + (topY - bottomY) * normalized
                 }
 
-                // Punch volume is drawn compressed into the middle half of the chart:
-                // 0 sits at the 1/4-height mark, 1 sits at the 3/4-height mark.
-                fun yForPunchVolume(value: Float): Float {
-                    val normalized = value.coerceIn(0f, 1f)
-                    val zeroY = chartBottom - chartHeight * 0.25f
-                    val oneY = chartBottom - chartHeight * 0.75f
-                    return zeroY + (oneY - zeroY) * normalized
-                }
+                fun yForPunchVolume(value: Float) = yForBand(value, bandTopFraction = 0f, bandBottomFraction = 0.5f)
+                fun yForGuardHeight(value: Float) = yForBand(value, bandTopFraction = 0.25f, bandBottomFraction = 0.75f)
+                fun yForMovement(value: Float) = yForBand(value, bandTopFraction = 0.5f, bandBottomFraction = 1f)
+
+                val punchAlpha = seriesAlpha(selectedMetric, GraphMetric.PUNCH_VOLUME)
+                val guardAlpha = seriesAlpha(selectedMetric, GraphMetric.GUARD_HEIGHT)
+                val movementAlpha = seriesAlpha(selectedMetric, GraphMetric.MOVEMENT)
 
                 drawSeries(
-                    points = series.timestamps.zip(series.guardHeight),
-                    fillColor = GraphBlue.copy(alpha = 0.12f),
-                    lineColor = GraphBlue,
-                    chartLeft = chartLeft,
-                    chartBottom = chartBottom,
-                    chartWidth = chartWidth,
-                    durationMs = safeDuration,
-                    yForValue = ::yForValue,
-                )
-                drawSeries(
-                    points = series.timestamps.zip(series.movement),
-                    fillColor = GraphGreen.copy(alpha = 0.12f),
-                    lineColor = GraphGreen,
-                    chartLeft = chartLeft,
-                    chartBottom = chartBottom,
-                    chartWidth = chartWidth,
-                    durationMs = safeDuration,
-                    yForValue = ::yForValue,
-                )
-                drawSeries(
-                    points = series.timestamps.zip(series.punchVolume),
+                    points = punchVolumeSeries.timestamps.zip(punchVolumeSeries.punchVolume),
                     fillColor = PunchHighlight.copy(alpha = 0.10f),
                     lineColor = PunchHighlight,
                     chartLeft = chartLeft,
-                    chartBottom = chartBottom,
+                    baselineY = chartBottom,
                     chartWidth = chartWidth,
                     durationMs = safeDuration,
                     yForValue = ::yForPunchVolume,
+                    alpha = punchAlpha,
+                )
+                drawSeries(
+                    points = guardMovementSeries.timestamps.zip(guardMovementSeries.guardHeight),
+                    fillColor = GraphBlue.copy(alpha = 0.12f),
+                    lineColor = GraphBlue,
+                    chartLeft = chartLeft,
+                    baselineY = chartBottom,
+                    chartWidth = chartWidth,
+                    durationMs = safeDuration,
+                    yForValue = ::yForGuardHeight,
+                    alpha = guardAlpha,
+                )
+                drawSeries(
+                    points = guardMovementSeries.timestamps.zip(guardMovementSeries.movement),
+                    fillColor = GraphGreen.copy(alpha = 0.12f),
+                    lineColor = GraphGreen,
+                    chartLeft = chartLeft,
+                    baselineY = chartBottom,
+                    chartWidth = chartWidth,
+                    durationMs = safeDuration,
+                    yForValue = ::yForMovement,
+                    alpha = movementAlpha,
                 )
 
+                // One dot per individual predicted punch, sitting exactly on the punch
+                // volume line at that punch's own end-time keyframe (see
+                // GraphMetrics.computePunchVolumeKeyframes) rather than a full-height
+                // bar, so a fast combo reads as a run of beads along the curve.
+                val punchVolumeByTimestamp = punchVolumeSeries.timestamps.zip(punchVolumeSeries.punchVolume).toMap()
                 punchWindows.forEach { window ->
-                    val x = xForTime(window.endMs.coerceIn(0L, safeDuration))
-                    drawRect(
-                        color = PunchHighlight.copy(alpha = 0.78f),
-                        topLeft = Offset(x - 2f, chartTop),
-                        size = Size(width = 4f, height = chartBottom - chartTop),
-                    )
+                    val endMs = window.endMs.coerceIn(0L, safeDuration)
+                    val normalizedVolume = punchVolumeByTimestamp[endMs] ?: return@forEach
+                    val center = Offset(xForTime(endMs), yForPunchVolume(normalizedVolume))
+                    drawCircle(color = Color.White.copy(alpha = 0.9f * punchAlpha), radius = 5f, center = center)
+                    drawCircle(color = PunchHighlight.copy(alpha = punchAlpha), radius = 3f, center = center)
                 }
 
                 val playheadX = xForTime(currentPositionMs.coerceIn(0L, safeDuration))
@@ -197,9 +270,17 @@ fun PerformanceGraph(
                     strokeWidth = 2.5f,
                 )
 
-                val punchesSoFar = punchWindows.count { it.startMs <= currentPositionMs.coerceIn(0L, safeDuration) }
+                val clampedPositionMs = currentPositionMs.coerceIn(0L, safeDuration)
+                val badgeLabel = when (selectedMetric) {
+                    GraphMetric.GUARD_HEIGHT ->
+                        "${(valueAtOrBefore(guardMovementSeries.timestamps, guardMovementSeries.guardHeight, clampedPositionMs) * 100).roundToInt()}%"
+                    GraphMetric.MOVEMENT ->
+                        "${(valueAtOrBefore(guardMovementSeries.timestamps, guardMovementSeries.movement, clampedPositionMs) * 100).roundToInt()}%"
+                    GraphMetric.PUNCH_VOLUME, null ->
+                        rawValueAtOrBefore(punchVolumeSeries.timestamps, punchVolumeSeries.rawPunchVolume, clampedPositionMs).toString()
+                }
                 drawCountLabel(
-                    count = punchesSoFar,
+                    label = badgeLabel,
                     x = playheadX,
                     y = 6f,
                 )
@@ -212,11 +293,44 @@ fun PerformanceGraph(
 private fun LegendSwatch(
     color: Color,
     label: String,
+    isDimmed: Boolean,
+    onClick: () -> Unit,
 ) {
-    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .alpha(if (isDimmed) LEGEND_DIMMED_ALPHA else 1f)
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Surface(modifier = Modifier.size(10.dp), color = color, shape = RoundedCornerShape(2.dp)) {}
         Text(text = label, color = StrykoTextMuted, style = MaterialTheme.typography.bodySmall)
     }
+}
+
+/** 1f when nothing is selected or [metric] is the selected one, [DIMMED_ALPHA]
+ * otherwise - the "focus" effect for tapping a legend item. */
+private fun seriesAlpha(selected: GraphMetric?, metric: GraphMetric): Float {
+    return if (selected == null || selected == metric) 1f else DIMMED_ALPHA
+}
+
+/** Last series value at or before [atMs], for the playhead badge to track whichever
+ * metric is currently focused. Falls back to the first point if [atMs] is earlier
+ * than every sample. */
+private fun valueAtOrBefore(timestamps: List<Long>, values: List<Float>, atMs: Long): Float {
+    if (values.isEmpty()) return 0f
+    val index = timestamps.indexOfLast { it <= atMs }
+    return if (index >= 0) values[index] else values.first()
+}
+
+/** Same lookup as [valueAtOrBefore] but over the punch volume keyframes' raw integer
+ * counts, so the playhead badge shows the running count within whichever combo covers
+ * [atMs] (0 between combos) instead of a lifetime total that never resets. */
+private fun rawValueAtOrBefore(timestamps: List<Long>, values: List<Int>, atMs: Long): Int {
+    if (values.isEmpty()) return 0
+    val index = timestamps.indexOfLast { it <= atMs }
+    return if (index >= 0) values[index] else values.first()
 }
 
 private fun DrawScope.drawSeries(
@@ -224,10 +338,11 @@ private fun DrawScope.drawSeries(
     fillColor: Color,
     lineColor: Color,
     chartLeft: Float,
-    chartBottom: Float,
+    baselineY: Float,
     chartWidth: Float,
     durationMs: Long,
     yForValue: (Float) -> Float,
+    alpha: Float = 1f,
 ) {
     if (points.size < 2) return
 
@@ -236,18 +351,20 @@ private fun DrawScope.drawSeries(
         Offset(chartLeft + (chartWidth * fraction), yForValue(value))
     }
 
+    // Every series curves through its points now (including punch volume, previously
+    // straight point-to-point) for a softer, more polished look across the board.
     val linePath = buildSmoothPath(pixelPoints)
     val fillPath = Path().apply {
         addPath(linePath)
-        lineTo(pixelPoints.last().x, chartBottom)
-        lineTo(pixelPoints.first().x, chartBottom)
+        lineTo(pixelPoints.last().x, baselineY)
+        lineTo(pixelPoints.first().x, baselineY)
         close()
     }
 
-    drawPath(path = fillPath, color = fillColor)
+    drawPath(path = fillPath, color = fillColor.copy(alpha = fillColor.alpha * alpha))
     drawPath(
         path = linePath,
-        color = lineColor,
+        color = lineColor.copy(alpha = lineColor.alpha * alpha),
         style = Stroke(width = 3f, cap = StrokeCap.Round, join = StrokeJoin.Round),
     )
 }
@@ -276,21 +393,23 @@ private fun buildSmoothPath(pixelPoints: List<Offset>): Path {
     return path
 }
 
-/** Circular badge on the playhead showing the punch count reached by [x]'s timestamp. */
+/** Circular badge on the playhead. Shows the punch count by default, or the
+ * currently focused metric's value (as a percentage) when one is selected. */
 private fun DrawScope.drawCountLabel(
-    count: Int,
+    label: String,
     x: Float,
     y: Float,
 ) {
-    val label = count.toString()
     val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = android.graphics.Color.WHITE
-        textSize = 28f
+        textSize = 26f
         typeface = Typeface.DEFAULT_BOLD
         textAlign = Paint.Align.CENTER
     }
 
-    val radius = 22f
+    // Radius grows to fit longer labels (e.g. "100%") while staying circular for
+    // short ones (e.g. "5").
+    val radius = (paint.measureText(label) / 2f + 12f).coerceAtLeast(22f)
     val center = Offset(x.coerceAtLeast(radius), y + radius)
     drawCircle(
         color = PunchHighlight.copy(alpha = 0.95f),
@@ -305,9 +424,29 @@ private fun DrawScope.drawCountLabel(
     )
 }
 
-private data class GraphSeries(
-    val punchVolume: List<Float>,
+private data class GuardMovementSeries(
     val guardHeight: List<Float>,
     val movement: List<Float>,
     val timestamps: List<Long>,
 )
+
+private data class PunchVolumeSeries(
+    val punchVolume: List<Float>,
+    val rawPunchVolume: List<Int>,
+    val timestamps: List<Long>,
+)
+
+/** Min-max scales [values] to 0..1 for a shared y-axis. A constant series maps to a
+ * flat 0 if that constant is ~zero (e.g. "no punches at all"), else a flat 0.5 -
+ * a constant non-zero value has no natural place on a relative 0..1 scale. */
+private fun normalizeToUnitRange(values: List<Double>): List<Float> {
+    if (values.isEmpty()) return emptyList()
+    val minValue = values.min()
+    val maxValue = values.max()
+    val range = maxValue - minValue
+    if (range <= 1e-9) {
+        val flat = if (maxValue > 1e-9) 0.5f else 0f
+        return values.map { flat }
+    }
+    return values.map { ((it - minValue) / range).toFloat() }
+}

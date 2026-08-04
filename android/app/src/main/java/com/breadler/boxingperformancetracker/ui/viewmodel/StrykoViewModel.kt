@@ -61,6 +61,12 @@ class StrykoViewModel(application: Application) : AndroidViewModel(application) 
 
     suspend fun getSession(sessionId: String): SessionSummary? = repository.getSession(sessionId)
 
+    fun deleteSession(sessionId: String) {
+        viewModelScope.launch {
+            repository.deleteSession(sessionId)
+        }
+    }
+
     fun clearImportState() {
         _importState.value = SessionProcessingState()
     }

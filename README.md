@@ -2,7 +2,7 @@
 
 BoxingPerformanceTracker is:
 
-- an **Android app written in Kotlin (Jetpack Compose)** that imports a boxing training video and runs the **entire inference pipeline fully on-device** — MediaPipe pose extraction, an annotated skeleton video, and a TFLite punch classifier — with no server and no network connection.
+- an **Android app written in Kotlin (Jetpack Compose)** that imports a boxing training video and runs the **entire inference pipeline fully on-device** — MediaPipe pose extraction, an annotated skeleton video, and a RandomForest punch classifier — with no server and no network connection.
 - a **Python offline pipeline** used to build the training dataset, train the models bundled into the Android app, and prototype new analysis before it gets ported to Kotlin.
 
 ## Repository layout
@@ -12,24 +12,12 @@ BoxingPerformanceTracker is:
 
 ## Python setup
 
-The pipeline needs two separate environments:
-
-**Main environment** (everything except TFLite export) — any recent Python works; this repo's `.venv` currently uses 3.14:
+Any recent Python works; this repo's `.venv` currently uses 3.14:
 
 ```bash
 cd python
 pip install -r requirements.txt
 ```
-
-**TFLite export environment** (`train_tflite_punch_model.py` only) — needs **Python ≤3.12**. TensorFlow has no wheel for very new Python versions, and only `tensorflow==2.17.0` is confirmed to produce a model your Android `tensorflow-lite` runtime version can actually load (a newer TF release will happily export a model your on-device interpreter then refuses to open with an op-version error). If you don't have Python 3.12 installed:
-
-```bash
-py install 3.12
-py -3.12 -m venv .venv-tflite-export
-.venv-tflite-export\Scripts\pip install tensorflow==2.17.0 pandas numpy
-```
-
-Use `.venv-tflite-export` only for the export step below, then discard it — it's gitignored and not needed at runtime.
 
 ## The pipeline, in order
 
@@ -69,42 +57,46 @@ python build_training_csv.py --pose-frames data/pose_frames.csv --punch-windows 
 
 By default, fixed-size positive windows are end-anchored so the labeled punch end pose (impact/contact frame) is preserved while the start can shift as needed. Use `--positive-anchor center` for midpoint anchoring, or `--use-full-punch-window` to keep each positive row's full labeled start/end range.
 
-### 4. Train the models
-
-Two training paths produce two different artifacts:
+### 4. Train the model
 
 ```bash
 cd python
-# Reference/experimentation model (not used by the Android app)
 python train_random_forest.py --input data/training.csv --output models/random_forest.joblib
-
-# The model the Android app actually ships with
-python train_tflite_punch_model.py --training-csv data/training.csv
 ```
 
-`train_tflite_punch_model.py` must run in the **Python ≤3.12 TFLite export environment** described above. It trains a small TensorFlow model from the same engineered motion features and writes the `.tflite` model plus feature metadata **directly into the Android assets folder**:
+This RandomForest is the model used for all Python-side testing *and* the one the Android app ships with — there's a single model now, not two independently trained ones. A separate small TensorFlow network used to be trained from scratch for on-device use, but evaluated with a proper video-grouped train/validation split (rather than a plain row shuffle, which let near-duplicate overlapping windows from the same clip leak across both sides), it came in at ~50% held-out accuracy - essentially chance - on this dataset's size (350 labeled rows across 111 videos). Porting the already-validated RandomForest directly avoids training a second, weaker model on the same thin data.
 
-- `android/app/src/main/assets/punch_model.tflite`
-- `android/app/src/main/assets/punch_model_metadata.json`
+### 5. Export the RandomForest for Android
+
+```bash
+cd python
+python export_random_forest_java.py --model models/random_forest.joblib
+```
+
+Ports the trained model to a plain Java class via [m2cgen](https://github.com/BayesWitnesses/m2cgen), writing it **directly into the Android source tree**:
+
+- `android/app/src/main/java/com/breadler/boxingperformancetracker/data/processing/PunchForestModel.java`
+
+`RandomForestPunchClassifier.kt` wraps it with the feature-column ordering (must match `feature_columns` in the `.joblib` artifact exactly - the generated class takes a plain positional `double[]`, with no column-name metadata of its own) and the punch/no-punch threshold. If you change the feature set or retrain with a different `classes_` order, the script prints the new feature list and a reminder to update `RandomForestPunchClassifier.kt` to match.
 
 `android/app/src/main/assets/pose_landmarker_lite.task` is checked in separately and doesn't need regenerating unless you want a different MediaPipe pose model.
 
 The pipeline is time-aware throughout: `pose_frames.csv` stores `timestamp_ms`, and frame-based punch labels are converted to milliseconds before training windows are built. Keep the same `--window-ms` everywhere (training, prediction, graph metrics), because windows must cover the same duration even when video frame rates differ.
 
-### 5. From here, the Android app runs everything itself
+### 6. From here, the Android app runs everything itself
 
-Once the two asset files above exist, the Android app needs nothing else from Python at runtime. Importing a video in-app:
+Once `PunchForestModel.java` exists, the Android app needs nothing else from Python at runtime. Importing a video in-app:
 
 1. Copies the video into local app storage.
 2. Runs MediaPipe pose extraction on-device and writes a local annotated skeleton video (no server, no network).
-3. Runs the bundled TFLite classifier over sliding windows to produce punch predictions and merged punch windows.
+3. Runs the bundled RandomForest classifier over sliding windows to produce punch predictions and merged punch windows.
 4. Persists everything to a local Room database so it survives app restarts and shows up under Previous Sessions.
 
-**Current gap:** the richer fatigue graph metrics below (punch volume as combos, guard height, movement) are Python-only right now. The Android graph currently shows a binary (not combo-aware) punch volume and flat placeholder lines for guard/movement, pending a Kotlin port of `graph_metrics.py`.
+The three fatigue graph metrics — punch volume, guard height, movement — are computed on-device too (`GraphMetrics.kt`, ported from the Python modules below) and shown on the session playback graph.
 
-### 6. Test prediction and fatigue metrics against a new (unlabeled) video
+### 7. Test prediction and fatigue metrics against a new (unlabeled) video
 
-This is the Python-side preview of what the app does on-device, plus the metrics not yet ported to it.
+This is the Python-side preview of what the app does on-device.
 
 ```bash
 cd python
@@ -115,7 +107,14 @@ python predict_punches.py --pose-frames data/user_pose_frames.csv --model models
 
 If the model is too conservative, lower the punch probability threshold (e.g. `--punch-threshold 0.35`).
 
-Then compute and preview the three fatigue metrics — punch volume (punches grouped into combos), guard height (how far the higher-guarding wrist sits above the nose), and movement (hip x/z speed):
+Then compute and preview the three fatigue metrics — punch volume (punches grouped into combos), guard height (how far the higher-guarding wrist sits above the nose), and movement (hip x/z speed). Each metric is its own stage/script, all on the same sliding-window grid; `graph_metrics.py` is the graph-generation stage that runs the other three and merges them:
+
+- `punch_volume.py` — combo-grouped punch count. Deliberately never smoothed/downsampled (a sparse, bursty signal — averaging it dilutes short combos almost to nothing).
+- `guard_height.py` — `nose_y - highest-guarding wrist_y` per window.
+- `movement.py` — hip-midpoint x/z speed per window.
+- `graph_metrics.py` — runs all three and merges them on `(video_id, center_ms)`; also owns `smooth_graph_metrics()`/`downsample_graph_metrics()`, applied to guard height/movement only.
+
+Each stage script also runs standalone (`python punch_volume.py --pose-frames ... --punch-windows ...`, etc.) if you want to inspect one metric in isolation.
 
 ```bash
 python graph_metrics.py --pose-frames data/user_pose_frames.csv --punch-windows data/predicted_punch_windows.csv --output data/graph_metrics.csv --combo-gap-ms 500
@@ -123,7 +122,7 @@ python graph_metrics.py --pose-frames data/user_pose_frames.csv --punch-windows 
 python plot_graph_metrics.py --pose-frames data/user_pose_frames.csv --punch-windows data/predicted_punch_windows.csv --output data/graph_metrics_plot.png
 ```
 
-`graph_metrics.py`'s CSV output is the exact, unsmoothed data. `plot_graph_metrics.py` additionally smooths, downsamples, and curve-fits it purely for a readable chart — see the module docstrings in `graph_metrics.py` for the smoothing/downsampling knobs (`--*-smoothing-ms`, `--downsample-bucket-ms`) if a plot looks too noisy or too flat.
+`graph_metrics.py`'s CSV output is the exact, unsmoothed data (punch volume always is; guard height/movement here too). `plot_graph_metrics.py` additionally smooths + downsamples guard height/movement and curve-fits all three purely for a readable chart — see the module docstrings for the smoothing/downsampling knobs (`--*-smoothing-ms`, `--downsample-bucket-ms`) if a plot looks too noisy or too flat.
 
 ### Optional: legacy FastAPI server
 

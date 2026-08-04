@@ -13,11 +13,19 @@ import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.poselandmarker.PoseLandmarker
 import java.io.File
+import kotlin.math.ceil
 
 class PoseFrameExtractor(private val context: Context) {
 
     /**
-     * Runs MediaPipe pose detection across the video at [frameStrideMs] increments.
+     * Runs MediaPipe pose detection across every [frameStride]-th frame of the video,
+     * in native decode order - mirroring pose_extractor.py / session_processing's
+     * extract_frame_observations() (both: sequential cv2.VideoCapture.read(), no
+     * seeking, timestamp_ms = frame_index * 1000 / fps). That's the exact extraction
+     * this app's on-device model was trained against; sampling on a synthetic
+     * fixed-ms grid instead (the previous getFrameAtTime-based approach) fed the
+     * classifier features built from different real timestamps/frame counts than
+     * training saw, independent of anything about the model itself.
      *
      * When [annotatedOutputFile] is provided, this also renders a skeleton-only
      * overlay (no punch predictions) for each processed frame and muxes it into a
@@ -27,7 +35,7 @@ class PoseFrameExtractor(private val context: Context) {
      */
     fun extract(
         videoUri: Uri,
-        frameStrideMs: Long,
+        frameStride: Int = 1,
         annotatedOutputFile: File? = null,
         onProgress: ((fraction: Float) -> Unit)? = null,
     ): List<FrameObservation> {
@@ -42,11 +50,24 @@ class PoseFrameExtractor(private val context: Context) {
                 .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
                 ?.toLongOrNull()
                 ?: 0L
-            Log.d(TAG, "extract: uri=$videoUri durationMs=$durationMs frameStrideMs=$frameStrideMs annotate=${annotatedOutputFile != null}")
             if (durationMs <= 0L) {
                 Log.e(TAG, "extract: could not read a valid video duration (got $durationMs) for $videoUri")
                 return emptyList()
             }
+
+            // Same fallback as pose_extractor.py's `if fps <= 0: fps = 30.0` for
+            // containers that don't report a frame count.
+            val reportedFrameCount = retriever
+                .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)
+                ?.toIntOrNull()
+                ?.takeIf { it > 0 }
+            val fps = reportedFrameCount?.let { it * 1000.0 / durationMs } ?: DEFAULT_FPS
+            val totalFrames = reportedFrameCount ?: ceil(durationMs / 1000.0 * DEFAULT_FPS).toInt()
+            Log.d(
+                TAG,
+                "extract: uri=$videoUri durationMs=$durationMs fps=$fps totalFrames=$totalFrames " +
+                    "frameStride=$frameStride annotate=${annotatedOutputFile != null}",
+            )
 
             val options = PoseLandmarker.PoseLandmarkerOptions.builder()
                 .setBaseOptions(
@@ -66,14 +87,10 @@ class PoseFrameExtractor(private val context: Context) {
             }
             try {
                 val observations = buildList {
-                    var frameIndex = 1
-                    var timestampMs = 0L
-                    while (timestampMs <= durationMs) {
-                        val rawBitmap = retriever.getFrameAtTime(
-                            timestampMs * 1000,
-                            MediaMetadataRetriever.OPTION_CLOSEST,
-                        )
-                        // MediaPipe's BitmapImageBuilder requires ARGB_8888. getFrameAtTime can
+                    for (frameIndex in 0 until totalFrames step frameStride.coerceAtLeast(1)) {
+                        val timestampMs = (frameIndex * 1000.0 / fps).toLong()
+                        val rawBitmap = retriever.getFrameAtIndex(frameIndex)
+                        // MediaPipe's BitmapImageBuilder requires ARGB_8888. getFrameAtIndex can
                         // return other configs (RGB_565, HARDWARE, RGBA_F16) depending on the
                         // device/codec, so normalize before doing anything else with the frame.
                         val bitmap = rawBitmap?.let {
@@ -84,7 +101,7 @@ class PoseFrameExtractor(private val context: Context) {
                             }
                         }
                         if (bitmap != null) {
-                            val observation = detectFrame(landmarker, bitmap, frameIndex, timestampMs)
+                            val observation = detectFrame(landmarker, bitmap, frameIndex + 1, timestampMs)
                             add(observation)
 
                             if (annotatedOutputFile != null && !annotationFailed) {
@@ -94,7 +111,7 @@ class PoseFrameExtractor(private val context: Context) {
                                     if (observation.poseDetected) {
                                         drawSkeleton(canvas, observation.landmarks, annotatedBitmap.width, annotatedBitmap.height)
                                     }
-                                    drawFrameLabel(canvas, frameIndex)
+                                    drawFrameLabel(canvas, frameIndex + 1)
 
                                     val encoder = videoEncoder ?: PoseVideoEncoder(
                                         outputFile = annotatedOutputFile,
@@ -105,7 +122,7 @@ class PoseFrameExtractor(private val context: Context) {
                                     annotatedBitmap.recycle()
                                 }.onFailure { error ->
                                     annotationFailed = true
-                                    Log.e(TAG, "extract: annotated video encoding failed at frame $frameIndex (timestampMs=$timestampMs)", error)
+                                    Log.e(TAG, "extract: annotated video encoding failed at frame ${frameIndex + 1} (timestampMs=$timestampMs)", error)
                                 }
                             }
 
@@ -113,9 +130,7 @@ class PoseFrameExtractor(private val context: Context) {
                         } else {
                             nullBitmapCount += 1
                         }
-                        frameIndex += 1
-                        timestampMs += frameStrideMs.coerceAtLeast(1L)
-                        onProgress?.invoke((timestampMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f))
+                        onProgress?.invoke(((frameIndex + 1).toFloat() / totalFrames.toFloat()).coerceIn(0f, 1f))
                     }
                 }
                 val poseDetectedCount = observations.count { it.poseDetected }
@@ -215,6 +230,9 @@ class PoseFrameExtractor(private val context: Context) {
 
     private companion object {
         const val TAG = "PoseFrameExtractor"
+
+        /** Matches pose_extractor.py's `if fps <= 0: fps = 30.0` fallback. */
+        const val DEFAULT_FPS = 30.0
 
         val boxingLandmarkIndices = listOf(
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,

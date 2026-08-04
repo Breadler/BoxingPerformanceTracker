@@ -19,8 +19,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.breadler.boxingperformancetracker.R
 import com.breadler.boxingperformancetracker.ui.theme.PunchHighlight
-import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
+import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
 
 @Composable
@@ -77,7 +77,7 @@ fun PlaybackControls(
                 Icon(
                     painter = painterResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play),
                     contentDescription = if (isPlaying) "Pause" else "Play",
-                    tint = StrykoBlue,
+                    tint = StrykoRed,
                 )
             }
         }

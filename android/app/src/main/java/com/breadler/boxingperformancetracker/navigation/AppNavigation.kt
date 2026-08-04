@@ -76,6 +76,7 @@ fun AppNavigation() {
                 onOpenSession = { sessionId ->
                     navController.navigate(Routes.sessionPlayback(sessionId))
                 },
+                onDeleteSession = viewModel::deleteSession,
             )
         }
         composable(
@@ -100,6 +101,7 @@ fun AppNavigation() {
                     onOpenSession = { selectedSessionId ->
                         navController.navigate(Routes.sessionPlayback(selectedSessionId))
                     },
+                    onDeleteSession = viewModel::deleteSession,
                 )
             } else {
                 SessionPlaybackScreen(

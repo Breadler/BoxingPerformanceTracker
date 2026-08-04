@@ -14,11 +14,10 @@ data class PunchPrediction(
 
 data class PerformancePoint(
     val timestampMs: Long,
-    val punchProbability: Double,
-    /** 1.0 when [timestampMs] falls inside a predicted punch window, else 0.0. Drives the Punch Volume graph. */
-    val punchVolume: Double,
-    val guardScore: Double,
-    val movementScore: Double,
+    /** nose_y - highest-guarding wrist_y. Positive = guard above the head, shrinks/negative as it drops. */
+    val guardHeight: Double,
+    /** Hip-midpoint speed on x/z (footwork), excluding vertical bob. */
+    val movement: Double,
 )
 
 interface SessionCardItem {

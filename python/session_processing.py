@@ -11,6 +11,7 @@ import pandas as pd
 
 from graph_metrics import compute_graph_metrics
 from predict_punches import predict_punches
+from punch_volume import DEFAULT_COMBO_GAP_MS
 from pose_extractor import (
     BOXING_LANDMARK_INDICES,
     DEFAULT_MODEL_PATH,
@@ -40,7 +41,7 @@ BOXING_CONNECTIONS = (
 @dataclass(slots=True)
 class PerformancePoint:
     timestamp_ms: int
-    punch_volume: int
+    punch_volume: float
     guard_height: float
     movement: float
 
@@ -421,7 +422,7 @@ def process_video(
     window_ms: int = 250,
     stride_ms: int = 40,
     frame_stride: int = 1,
-    combo_gap_ms: int = 500,
+    combo_gap_ms: int = DEFAULT_COMBO_GAP_MS,
 ) -> ProcessingResult:
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
@@ -483,7 +484,7 @@ def process_video(
     performance_points = [
         PerformancePoint(
             timestamp_ms=int(row.center_ms),
-            punch_volume=int(row.punch_volume),
+            punch_volume=float(row.punch_volume),
             guard_height=float(row.guard_height),
             movement=float(row.movement),
         )

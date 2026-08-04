@@ -10,7 +10,7 @@ android {
 
     defaultConfig {
         applicationId = "com.breadler.boxingperformancetracker"
-        minSdk = 24
+        minSdk = 28
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
@@ -30,12 +30,12 @@ android {
         compose = true
     }
 
-    // The MediaPipe pose model (.task) and the TFLite punch classifier (.tflite) are
-    // memory-mapped directly out of the APK via AssetFileDescriptor. If AAPT compresses
-    // them, that mapping throws at runtime ("probably compressed") and both models fail
-    // to load silently unless the caller logs it. Keep them stored uncompressed.
+    // The MediaPipe pose model (.task) is memory-mapped directly out of the APK via
+    // AssetFileDescriptor. If AAPT compresses it, that mapping throws at runtime
+    // ("probably compressed") and the model fails to load silently unless the
+    // caller logs it. Keep it stored uncompressed.
     androidResources {
-        noCompress += listOf("tflite", "task")
+        noCompress += listOf("task")
     }
 
     compileOptions {
@@ -62,7 +62,6 @@ dependencies {
     kapt("androidx.room:room-compiler:2.6.1")
     implementation("com.google.code.gson:gson:2.11.0")
     implementation("com.google.mediapipe:tasks-vision:0.10.14")
-    implementation("org.tensorflow:tensorflow-lite:2.17.0")
 
     implementation(platform("androidx.compose:compose-bom:2024.06.00"))
     implementation("androidx.compose.ui:ui")
