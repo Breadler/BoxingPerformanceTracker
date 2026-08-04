@@ -32,6 +32,25 @@ class SessionRepository(context: Context) {
         return dao.getSession(sessionId)?.toDomain()
     }
 
+    /** Deletes the session row and the local video files it owns (source + annotated
+     * copies live under this app's private storage, so nothing else references them). */
+    suspend fun deleteSession(sessionId: String): Unit = withContext(Dispatchers.IO) {
+        val entity = dao.getSession(sessionId) ?: return@withContext
+        dao.delete(sessionId)
+        deleteLocalFile(entity.sourceVideoUri)
+        deleteLocalFile(entity.annotatedVideoUri)
+    }
+
+    private fun deleteLocalFile(uriString: String) {
+        if (uriString.isBlank()) return
+        runCatching {
+            val path = Uri.parse(uriString).path ?: return
+            File(path).takeIf { it.exists() }?.delete()
+        }.onFailure { error ->
+            Log.e(TAG, "deleteLocalFile: failed to delete $uriString", error)
+        }
+    }
+
     suspend fun importVideo(
         videoUri: Uri,
         onProgress: (status: String, fraction: Float?) -> Unit = { _, _ -> },
@@ -56,10 +75,11 @@ class SessionRepository(context: Context) {
             onProgress("Saving session...", 0.97f)
 
             val annotatedVideoUri = processingResult.annotatedVideoPath?.let { Uri.fromFile(File(it)).toString() }
+            val importedAt = Date()
             val session = SessionSummary(
                 id = sessionId,
-                title = sourceName.substringBeforeLast(".", sourceName),
-                dateLabel = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(Date()),
+                title = SimpleDateFormat("h:mm a", Locale.getDefault()).format(importedAt),
+                dateLabel = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(importedAt),
                 durationLabel = formatDurationLabel(durationMs),
                 durationMs = durationMs,
                 sourceVideoUri = storedVideoUri.toString(),

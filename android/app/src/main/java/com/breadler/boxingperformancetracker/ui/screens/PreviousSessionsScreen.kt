@@ -31,6 +31,7 @@ fun PreviousSessionsScreen(
     sessions: List<SessionSummary>,
     onExit: () -> Unit,
     onOpenSession: (String) -> Unit,
+    onDeleteSession: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     StrykoSystemBars(statusBarColor = StrykoBlue, navigationBarColor = StrykoBlue)
@@ -60,6 +61,7 @@ fun PreviousSessionsScreen(
                         SessionCard(
                             session = session,
                             onPlay = { onOpenSession(session.id) },
+                            onDelete = { onDeleteSession(session.id) },
                         )
                     }
                 }

@@ -9,7 +9,4 @@ scipy
 fastapi
 uvicorn
 python-multipart
-
-# tensorflow is intentionally not listed here - it has no wheel for this project's
-# Python version. Only train_tflite_punch_model.py needs it, in a separate Python 3.12
-# environment. See "Export the on-device Android model" in README.md.
+m2cgen
