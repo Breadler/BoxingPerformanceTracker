@@ -8,14 +8,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
@@ -24,18 +19,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.breadler.boxingperformancetracker.R
 import com.breadler.boxingperformancetracker.data.SessionSummary
 import com.breadler.boxingperformancetracker.ui.components.PerformanceGraph
 import com.breadler.boxingperformancetracker.ui.components.PlaybackControls
 import com.breadler.boxingperformancetracker.ui.components.SessionVideoPlayer
+import com.breadler.boxingperformancetracker.ui.components.SmallRoundButton
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBackground
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
-import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 
@@ -144,26 +136,6 @@ fun SessionPlaybackScreen(
                 },
                 modifier = Modifier.padding(bottom = 8.dp),
             )
-        }
-    }
-}
-
-@Composable
-private fun SmallRoundButton(
-    text: String,
-    background: Color,
-    iconResId: Int,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        shape = androidx.compose.foundation.shape.RoundedCornerShape(25.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = background),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(painter = painterResource(iconResId), contentDescription = null, tint = StrykoCard, modifier = Modifier.size(18.dp))
-            Text(text = text, color = StrykoCard, fontWeight = FontWeight.ExtraBold)
         }
     }
 }

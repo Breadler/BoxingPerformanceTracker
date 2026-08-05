@@ -13,6 +13,7 @@ data class SessionEntity(
     val sourceVideoName: String,
     val sourceVideoUri: String,
     val annotatedVideoUri: String,
+    val thumbnailUri: String,
     val punchCount: Int,
     val processedAtMs: Long,
     val punchWindowsJson: String,

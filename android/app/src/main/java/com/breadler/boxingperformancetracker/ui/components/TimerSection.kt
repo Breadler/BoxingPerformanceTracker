@@ -27,6 +27,7 @@ fun TimerSection(
     onMinus: () -> Unit,
     onPlus: () -> Unit,
     modifier: Modifier = Modifier,
+    adjustable: Boolean = true,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -42,44 +43,52 @@ fun TimerSection(
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
-            modifier = Modifier.pointerInput(Unit) {
-                var accumulatedDragPx = 0f
-                detectVerticalDragGestures(
-                    onDragStart = { accumulatedDragPx = 0f },
-                    onVerticalDrag = { change, dragAmount ->
-                        change.consume()
-                        // Dragging up increases the value, dragging down decreases it.
-                        accumulatedDragPx += dragAmount
-                        while (accumulatedDragPx <= -DRAG_PX_PER_STEP) {
-                            onPlus()
-                            accumulatedDragPx += DRAG_PX_PER_STEP
-                        }
-                        while (accumulatedDragPx >= DRAG_PX_PER_STEP) {
-                            onMinus()
-                            accumulatedDragPx -= DRAG_PX_PER_STEP
-                        }
-                    },
-                )
+            modifier = if (adjustable) {
+                Modifier.pointerInput(Unit) {
+                    var accumulatedDragPx = 0f
+                    detectVerticalDragGestures(
+                        onDragStart = { accumulatedDragPx = 0f },
+                        onVerticalDrag = { change, dragAmount ->
+                            change.consume()
+                            // Dragging up increases the value, dragging down decreases it.
+                            accumulatedDragPx += dragAmount
+                            while (accumulatedDragPx <= -DRAG_PX_PER_STEP) {
+                                onPlus()
+                                accumulatedDragPx += DRAG_PX_PER_STEP
+                            }
+                            while (accumulatedDragPx >= DRAG_PX_PER_STEP) {
+                                onMinus()
+                                accumulatedDragPx -= DRAG_PX_PER_STEP
+                            }
+                        },
+                    )
+                }
+            } else {
+                Modifier
             },
         ) {
-            TimerButton(
-                iconResId = R.drawable.ic_minus,
-                onClick = onMinus,
-                backgroundColor = StrykoCard,
-                iconTint = StrykoRed,
-            )
+            if (adjustable) {
+                TimerButton(
+                    iconResId = R.drawable.ic_minus,
+                    onClick = onMinus,
+                    backgroundColor = StrykoCard,
+                    iconTint = StrykoRed,
+                )
+            }
             Text(
                 text = time,
                 color = StrykoRed,
                 fontWeight = FontWeight.ExtraBold,
                 fontSize = 34.sp,
             )
-            TimerButton(
-                iconResId = R.drawable.ic_plus,
-                onClick = onPlus,
-                backgroundColor = StrykoCard,
-                iconTint = StrykoRed,
-            )
+            if (adjustable) {
+                TimerButton(
+                    iconResId = R.drawable.ic_plus,
+                    onClick = onPlus,
+                    backgroundColor = StrykoCard,
+                    iconTint = StrykoRed,
+                )
+            }
         }
     }
 }

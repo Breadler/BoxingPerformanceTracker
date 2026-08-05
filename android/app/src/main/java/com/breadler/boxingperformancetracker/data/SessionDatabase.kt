@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 
 @Database(
     entities = [SessionEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class SessionDatabase : RoomDatabase() {
@@ -23,7 +23,11 @@ abstract class SessionDatabase : RoomDatabase() {
                     context.applicationContext,
                     SessionDatabase::class.java,
                     "stryko_sessions.db",
-                ).build().also { instance = it }
+                )
+                    // No real migrations written yet at this stage - a schema bump just
+                    // recreates the table instead of crashing existing installs.
+                    .fallbackToDestructiveMigration()
+                    .build().also { instance = it }
             }
         }
     }

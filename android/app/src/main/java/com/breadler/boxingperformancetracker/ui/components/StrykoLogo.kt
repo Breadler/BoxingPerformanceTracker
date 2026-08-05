@@ -42,13 +42,13 @@ fun StrykoLogo(
         Image(
             painter = painterResource(R.drawable.logo_stryko),
             contentDescription = null,
-            modifier = Modifier.width(34.dp),
+            modifier = Modifier.width(54.dp),
         )
-        Spacer(modifier = Modifier.width(10.dp))
+        Spacer(modifier = Modifier.width(14.dp))
         Text(
             text = "StryKO",
             color = StrykoRed,
-            fontSize = 36.sp,
+            fontSize = 54.sp,
             fontWeight = FontWeight.Black,
             fontFamily = PlayfairDisplayBlack,
             textAlign = TextAlign.Center,

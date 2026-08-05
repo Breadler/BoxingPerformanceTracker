@@ -1,8 +1,12 @@
 package com.breadler.boxingperformancetracker.ui.components
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -31,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,7 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,7 +57,9 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val HOLD_TO_DELETE_MS = 900
 
@@ -94,10 +103,9 @@ fun SessionCard(
                         .padding(start = 4.dp),
                 )
             } else {
-                Box(
-                    modifier = Modifier
-                        .size(width = 100.dp, height = 74.dp)
-                        .background(Color.Black, RoundedCornerShape(12.dp)),
+                SessionThumbnail(
+                    thumbnailUri = session.thumbnailUri,
+                    modifier = Modifier.size(width = 100.dp, height = 74.dp),
                 )
 
                 Spacer(modifier = Modifier.width(14.dp))
@@ -138,6 +146,55 @@ fun SessionCard(
                     )
                 }
             }
+        }
+    }
+}
+
+/** In-memory only - thumbnails are already small (max 480px) local JPEGs, this just
+ * avoids re-decoding one on every scroll pass through the list. */
+private object SessionThumbnailCache {
+    private val cache = mutableMapOf<String, Bitmap?>()
+
+    fun get(uri: String): Bitmap? = cache[uri]
+    fun put(uri: String, bitmap: Bitmap?) {
+        cache[uri] = bitmap
+    }
+}
+
+@Composable
+private fun SessionThumbnail(
+    thumbnailUri: String?,
+    modifier: Modifier = Modifier,
+) {
+    var bitmap by remember(thumbnailUri) {
+        mutableStateOf(thumbnailUri?.let(SessionThumbnailCache::get))
+    }
+
+    LaunchedEffect(thumbnailUri) {
+        if (thumbnailUri != null && bitmap == null) {
+            val decoded = withContext(Dispatchers.IO) {
+                runCatching {
+                    val path = Uri.parse(thumbnailUri).path ?: return@runCatching null
+                    BitmapFactory.decodeFile(path)
+                }.getOrNull()
+            }
+            SessionThumbnailCache.put(thumbnailUri, decoded)
+            bitmap = decoded
+        }
+    }
+
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.Black),
+    ) {
+        bitmap?.let {
+            Image(
+                bitmap = it.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }
