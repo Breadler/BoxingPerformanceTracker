@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.breadler.boxingperformancetracker.data.PerformancePoint
+import com.breadler.boxingperformancetracker.data.ProcessingPhase
 import com.breadler.boxingperformancetracker.data.PunchPrediction
 import com.breadler.boxingperformancetracker.data.PunchWindow
 import java.io.File
@@ -24,12 +25,12 @@ class OnDeviceSessionProcessor(private val context: Context) {
     fun process(
         videoUri: Uri,
         annotatedOutputFile: File? = null,
-        onProgress: ((fraction: Float) -> Unit)? = null,
+        onProgress: ((phase: ProcessingPhase, fraction: Float) -> Unit)? = null,
     ): OnDeviceProcessingResult {
         val observations = PoseFrameExtractor(context).extract(
             videoUri,
             annotatedOutputFile = annotatedOutputFile,
-            onProgress = onProgress,
+            onProgress = { fraction -> onProgress?.invoke(ProcessingPhase.EXTRACTING, fraction) },
         )
         if (observations.isEmpty()) {
             throw IllegalStateException(
@@ -37,6 +38,7 @@ class OnDeviceSessionProcessor(private val context: Context) {
             )
         }
 
+        onProgress?.invoke(ProcessingPhase.DETECTING, 0f)
         val predictions = buildPredictions(observations)
         if (predictions.isEmpty()) {
             Log.w(

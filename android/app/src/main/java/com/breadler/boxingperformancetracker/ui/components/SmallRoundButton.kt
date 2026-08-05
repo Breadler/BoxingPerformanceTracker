@@ -24,6 +24,7 @@ fun SmallRoundButton(
     background: Color,
     iconResId: Int,
     onClick: () -> Unit,
+    iconAtEnd: Boolean = false,
 ) {
     Button(
         onClick = onClick,
@@ -32,8 +33,12 @@ fun SmallRoundButton(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(painter = painterResource(iconResId), contentDescription = null, tint = StrykoCard, modifier = Modifier.size(18.dp))
+            val icon = @Composable {
+                Icon(painter = painterResource(iconResId), contentDescription = null, tint = StrykoCard, modifier = Modifier.size(18.dp))
+            }
+            if (!iconAtEnd) icon()
             Text(text = text, color = StrykoCard, fontWeight = FontWeight.ExtraBold)
+            if (iconAtEnd) icon()
         }
     }
 }

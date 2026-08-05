@@ -51,14 +51,26 @@ data class SessionSummary(
     override val punchCount: Int = punchWindows.size,
 ) : SessionCardItem
 
+enum class ProcessingPhase(val label: String) {
+    COPYING("Copying video..."),
+    LOADING_MODELS("Loading models..."),
+    EXTRACTING("Extracting..."),
+    DETECTING("Detecting..."),
+    SAVING("Saving..."),
+}
+
 data class SessionProcessingState(
     val isProcessing: Boolean = false,
-    val statusMessage: String = "",
+    val sessionName: String = "",
+    val phase: ProcessingPhase? = null,
     /** 0f..1f progress through the local pose+punch analysis pipeline, or null while indeterminate. */
     val progress: Float? = null,
+    val startTimeMs: Long = 0L,
     val errorMessage: String? = null,
     val completedSessionId: String? = null,
-)
+) {
+    val isActive: Boolean get() = isProcessing || completedSessionId != null || errorMessage != null
+}
 
 object SampleBoxingSessions {
     private val sessions = listOf(
