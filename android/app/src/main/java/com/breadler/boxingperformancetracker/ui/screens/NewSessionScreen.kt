@@ -1,8 +1,12 @@
 package com.breadler.boxingperformancetracker.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,32 +18,43 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Cameraswitch
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.breadler.boxingperformancetracker.R
 import com.breadler.boxingperformancetracker.data.SessionProcessingState
+import com.breadler.boxingperformancetracker.ui.components.CameraPreview
 import com.breadler.boxingperformancetracker.ui.components.RecordButton
 import com.breadler.boxingperformancetracker.ui.components.TimerSection
+import com.breadler.boxingperformancetracker.ui.components.rememberCameraRecordingController
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBackground
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlack
@@ -47,6 +62,14 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import java.io.File
+import java.util.UUID
+
+private enum class RecordingPhase { IDLE, PREPARING, RECORDING }
 
 @Composable
 fun NewSessionScreen(
@@ -58,9 +81,76 @@ fun NewSessionScreen(
 ) {
     StrykoSystemBars(statusBarColor = StrykoRed, navigationBarColor = StrykoRed)
 
-    var isRecording by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val cameraController = rememberCameraRecordingController()
+
     var prepareSeconds by remember { mutableStateOf(30) }
     var workSeconds by remember { mutableStateOf(180) }
+    var phase by remember { mutableStateOf(RecordingPhase.IDLE) }
+    var prepareRemainingSeconds by remember { mutableStateOf(prepareSeconds) }
+    var workRemainingSeconds by remember { mutableStateOf(workSeconds) }
+    var recordingJob by remember { mutableStateOf<Job?>(null) }
+
+    var hasCameraPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED,
+        )
+    }
+    val cameraPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted -> hasCameraPermission = granted }
+
+    LaunchedEffect(Unit) {
+        if (!hasCameraPermission) {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { recordingJob?.cancel() }
+    }
+
+    fun cancelActiveRecording() {
+        recordingJob?.cancel()
+        recordingJob = null
+        cameraController.stopRecording()
+        phase = RecordingPhase.IDLE
+    }
+
+    fun startRecordingSession() {
+        recordingJob = scope.launch {
+            phase = RecordingPhase.PREPARING
+            prepareRemainingSeconds = prepareSeconds
+            while (prepareRemainingSeconds > 0) {
+                delay(1000)
+                prepareRemainingSeconds -= 1
+            }
+
+            phase = RecordingPhase.RECORDING
+            workRemainingSeconds = workSeconds
+            val outputDir = File(context.cacheDir, "camera_recordings").apply { mkdirs() }
+            val outputFile = File(outputDir, "${UUID.randomUUID()}.mp4")
+
+            val finalizedUri = CompletableDeferred<Uri?>()
+            cameraController.startRecording(outputFile) { uri -> finalizedUri.complete(uri) }
+
+            while (workRemainingSeconds > 0) {
+                delay(1000)
+                workRemainingSeconds -= 1
+            }
+            cameraController.stopRecording()
+
+            val resultUri = finalizedUri.await()
+            phase = RecordingPhase.IDLE
+            recordingJob = null
+            if (resultUri != null) {
+                onImportVideo(resultUri)
+            } else {
+                Log.e("NewSessionScreen", "startRecordingSession: recording failed, nothing to import")
+            }
+        }
+    }
 
     LaunchedEffect(importState.completedSessionId) {
         importState.completedSessionId?.let(onImportFinished)
@@ -126,19 +216,72 @@ fun NewSessionScreen(
                     .fillMaxWidth()
                     .height(430.dp),
             ) {
-                Surface(
-                    color = StrykoBlack,
-                    shape = RoundedCornerShape(15.dp),
-                    modifier = Modifier.fillMaxSize(),
-                ) {}
+                if (hasCameraPermission) {
+                    CameraPreview(
+                        controller = cameraController,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(15.dp)),
+                    )
+                } else {
+                    Surface(
+                        color = StrykoBlack,
+                        shape = RoundedCornerShape(15.dp),
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
+                        ) {
+                            Text(
+                                text = "Camera access is needed to record a session",
+                                color = Color.White,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Button(
+                                onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) },
+                                colors = ButtonDefaults.buttonColors(containerColor = StrykoRed),
+                            ) {
+                                Text(text = "Grant camera access", color = StrykoCard, fontWeight = FontWeight.ExtraBold)
+                            }
+                        }
+                    }
+                }
 
                 RecordButton(
-                    active = isRecording || importState.isProcessing,
-                    onClick = { if (!importState.isProcessing) isRecording = !isRecording },
+                    active = phase != RecordingPhase.IDLE || importState.isProcessing,
+                    onClick = {
+                        if (importState.isProcessing || !hasCameraPermission) return@RecordButton
+                        if (phase == RecordingPhase.IDLE) startRecordingSession() else cancelActiveRecording()
+                    },
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .offset(y = 43.dp),
                 )
+
+                // Switching cameras mid-recording isn't supported cleanly by CameraX's
+                // VideoCapture, so this is only offered before a session starts.
+                if (hasCameraPermission && phase == RecordingPhase.IDLE) {
+                    IconButton(
+                        onClick = { cameraController.switchCamera() },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .size(44.dp)
+                            .background(Color.Black.copy(alpha = 0.45f), CircleShape),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Cameraswitch,
+                            contentDescription = "Switch camera",
+                            tint = Color.White,
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(38.dp))
@@ -154,15 +297,17 @@ fun NewSessionScreen(
 
             TimerSection(
                 title = "PREPARE",
-                time = formatDuration(prepareSeconds),
+                time = formatDuration(if (phase == RecordingPhase.IDLE) prepareSeconds else prepareRemainingSeconds),
                 onMinus = { prepareSeconds = (prepareSeconds - 5).coerceAtLeast(0) },
                 onPlus = { prepareSeconds += 5 },
+                adjustable = phase == RecordingPhase.IDLE,
             )
             TimerSection(
                 title = "WORK",
-                time = formatDuration(workSeconds),
+                time = formatDuration(if (phase == RecordingPhase.RECORDING) workRemainingSeconds else workSeconds),
                 onMinus = { workSeconds = (workSeconds - 15).coerceAtLeast(0) },
                 onPlus = { workSeconds += 15 },
+                adjustable = phase == RecordingPhase.IDLE,
             )
         }
 

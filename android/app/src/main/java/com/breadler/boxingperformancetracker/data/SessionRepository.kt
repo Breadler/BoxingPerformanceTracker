@@ -1,6 +1,7 @@
 package com.breadler.boxingperformancetracker.data
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -32,13 +33,14 @@ class SessionRepository(context: Context) {
         return dao.getSession(sessionId)?.toDomain()
     }
 
-    /** Deletes the session row and the local video files it owns (source + annotated
-     * copies live under this app's private storage, so nothing else references them). */
+    /** Deletes the session row and the local video/thumbnail files it owns (all live
+     * under this app's private storage, so nothing else references them). */
     suspend fun deleteSession(sessionId: String): Unit = withContext(Dispatchers.IO) {
         val entity = dao.getSession(sessionId) ?: return@withContext
         dao.delete(sessionId)
         deleteLocalFile(entity.sourceVideoUri)
         deleteLocalFile(entity.annotatedVideoUri)
+        deleteLocalFile(entity.thumbnailUri)
     }
 
     private fun deleteLocalFile(uriString: String) {
@@ -75,6 +77,8 @@ class SessionRepository(context: Context) {
             onProgress("Saving session...", 0.97f)
 
             val annotatedVideoUri = processingResult.annotatedVideoPath?.let { Uri.fromFile(File(it)).toString() }
+            val thumbnailSourceFile = processingResult.annotatedVideoPath?.let(::File) ?: storedVideo
+            val thumbnailUri = generateThumbnail(sessionId, thumbnailSourceFile)
             val importedAt = Date()
             val session = SessionSummary(
                 id = sessionId,
@@ -84,6 +88,7 @@ class SessionRepository(context: Context) {
                 durationMs = durationMs,
                 sourceVideoUri = storedVideoUri.toString(),
                 annotatedVideoUri = annotatedVideoUri,
+                thumbnailUri = thumbnailUri,
                 sourceVideoName = sourceName,
                 punchWindows = processingResult.punchWindows,
                 punchPredictions = processingResult.punchPredictions,
@@ -91,7 +96,11 @@ class SessionRepository(context: Context) {
                 punchCount = processingResult.punchWindows.size,
             )
             dao.upsert(session.toEntity())
-            Log.d(TAG, "importVideo: sessionId=$sessionId saved with punchCount=${session.punchCount}, annotatedVideo=${annotatedVideoUri != null}")
+            Log.d(
+                TAG,
+                "importVideo: sessionId=$sessionId saved with punchCount=${session.punchCount}, " +
+                    "annotatedVideo=${annotatedVideoUri != null}, thumbnail=${thumbnailUri != null}",
+            )
             session
         }.onFailure { error ->
             Log.e(TAG, "importVideo: failed", error)
@@ -102,6 +111,41 @@ class SessionRepository(context: Context) {
         val annotatedDir = File(appContext.filesDir, "session_videos/annotated")
         annotatedDir.mkdirs()
         return File(annotatedDir, "$sessionId.mp4")
+    }
+
+    /** Grabs one frame partway into [videoFile] (not frame 0, which is often blank
+     * before the boxer steps into the shot) and saves it as a scaled-down JPEG for
+     * the session list. Prefers the annotated (skeleton-overlay) video over the raw
+     * source when both exist, since it's the more distinctive/recognizable preview. */
+    private fun generateThumbnail(sessionId: String, videoFile: File): String? {
+        if (!videoFile.exists()) return null
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(videoFile.absolutePath)
+            val durationMs = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+            val frameTimeUs = (durationMs * 1000L / 4).coerceAtLeast(0L)
+            val frame = retriever.getFrameAtTime(frameTimeUs, MediaMetadataRetriever.OPTION_CLOSEST)
+                ?: return null
+
+            val scale = THUMBNAIL_MAX_DIMENSION_PX.toFloat() / maxOf(frame.width, frame.height)
+            val scaledFrame = if (scale < 1f) {
+                Bitmap.createScaledBitmap(frame, (frame.width * scale).toInt(), (frame.height * scale).toInt(), true)
+            } else {
+                frame
+            }
+
+            val thumbnailDir = File(appContext.filesDir, "session_videos/thumbnails").apply { mkdirs() }
+            val thumbnailFile = File(thumbnailDir, "$sessionId.jpg")
+            thumbnailFile.outputStream().use { output ->
+                scaledFrame.compress(Bitmap.CompressFormat.JPEG, THUMBNAIL_JPEG_QUALITY, output)
+            }
+            Uri.fromFile(thumbnailFile).toString()
+        } catch (error: Exception) {
+            Log.e(TAG, "generateThumbnail: failed for sessionId=$sessionId", error)
+            null
+        } finally {
+            retriever.release()
+        }
     }
 
     private fun copyUriToSessionStorage(videoUri: Uri, sourceName: String): File {
@@ -150,6 +194,7 @@ class SessionRepository(context: Context) {
             durationMs = durationMs,
             sourceVideoUri = sourceVideoUri.ifBlank { null },
             annotatedVideoUri = annotatedVideoUri.ifBlank { null },
+            thumbnailUri = thumbnailUri.ifBlank { null },
             sourceVideoName = sourceVideoName,
             punchCount = punchCount,
             punchWindows = gson.fromJson(punchWindowsJson, punchWindowListType()),
@@ -168,6 +213,7 @@ class SessionRepository(context: Context) {
             sourceVideoName = sourceVideoName ?: title,
             sourceVideoUri = sourceVideoUri.orEmpty(),
             annotatedVideoUri = annotatedVideoUri.orEmpty(),
+            thumbnailUri = thumbnailUri.orEmpty(),
             punchCount = punchCount,
             processedAtMs = System.currentTimeMillis(),
             punchWindowsJson = gson.toJson(punchWindows),
@@ -189,5 +235,7 @@ class SessionRepository(context: Context) {
 
     private companion object {
         const val TAG = "SessionRepository"
+        const val THUMBNAIL_MAX_DIMENSION_PX = 480
+        const val THUMBNAIL_JPEG_QUALITY = 85
     }
 }

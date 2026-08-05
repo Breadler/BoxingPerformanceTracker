@@ -26,6 +26,7 @@ interface SessionCardItem {
     val dateLabel: String
     val durationLabel: String
     val punchCount: Int
+    val thumbnailUri: String?
 }
 
 data class SessionSummary(
@@ -42,6 +43,8 @@ data class SessionSummary(
     val sourceVideoUri: String? = null,
     /** URI for the processed video with overlays. */
     val annotatedVideoUri: String? = null,
+    /** URI for a still-frame thumbnail generated from the video at import time. */
+    override val thumbnailUri: String? = null,
     val sourceVideoName: String? = null,
     val punchPredictions: List<PunchPrediction> = emptyList(),
     val performancePoints: List<PerformancePoint> = emptyList(),
