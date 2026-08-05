@@ -55,26 +55,32 @@ class SessionRepository(context: Context) {
 
     suspend fun importVideo(
         videoUri: Uri,
-        onProgress: (status: String, fraction: Float?) -> Unit = { _, _ -> },
+        sessionName: String,
+        onProgress: (phase: ProcessingPhase, fraction: Float?) -> Unit = { _, _ -> },
     ): Result<SessionSummary> = withContext(Dispatchers.IO) {
         runCatching {
             val sessionId = UUID.randomUUID().toString()
-            onProgress("Copying video to device storage...", 0f)
+            onProgress(ProcessingPhase.COPYING, 0f)
             val sourceName = queryDisplayName(videoUri) ?: "Imported video"
             val storedVideo = copyUriToSessionStorage(videoUri, sourceName)
             val storedVideoUri = Uri.fromFile(storedVideo)
             val durationMs = readVideoDurationMs(videoUri)
 
-            onProgress("Loading on-device pose and punch models...", 0.05f)
+            onProgress(ProcessingPhase.LOADING_MODELS, 0.05f)
             val annotatedOutputFile = annotatedVideoFile(sessionId)
             Log.d(TAG, "importVideo: sessionId=$sessionId source=$sourceName durationMs=$durationMs")
             val processingResult = OnDeviceSessionProcessor(appContext).process(
                 storedVideoUri,
                 annotatedOutputFile,
-            ) { fraction ->
-                onProgress("Analyzing pose and punches (${(fraction * 100).toInt()}%)...", 0.05f + fraction * 0.9f)
+            ) { phase, fraction ->
+                val overall = when (phase) {
+                    ProcessingPhase.EXTRACTING -> 0.05f + fraction * 0.8f
+                    ProcessingPhase.DETECTING -> 0.85f
+                    else -> null
+                }
+                onProgress(phase, overall)
             }
-            onProgress("Saving session...", 0.97f)
+            onProgress(ProcessingPhase.SAVING, 0.95f)
 
             val annotatedVideoUri = processingResult.annotatedVideoPath?.let { Uri.fromFile(File(it)).toString() }
             val thumbnailSourceFile = processingResult.annotatedVideoPath?.let(::File) ?: storedVideo
@@ -82,7 +88,7 @@ class SessionRepository(context: Context) {
             val importedAt = Date()
             val session = SessionSummary(
                 id = sessionId,
-                title = SimpleDateFormat("h:mm a", Locale.getDefault()).format(importedAt),
+                title = sessionName,
                 dateLabel = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault()).format(importedAt),
                 durationLabel = formatDurationLabel(durationMs),
                 durationMs = durationMs,

@@ -82,10 +82,11 @@ fun SessionPlaybackScreen(
                     onClick = onExit,
                 )
                 SmallRoundButton(
-                    text = "start a new round",
+                    text = "new round",
                     background = StrykoRed,
                     iconResId = R.drawable.ic_next,
                     onClick = onStartNewRound,
+                    iconAtEnd = true,
                 )
             }
 

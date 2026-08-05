@@ -194,12 +194,12 @@ fun PerformanceGraph(
                     return chartLeft + chartWidth * fraction
                 }
 
-                // Each series' line is staggered into its own half-height band so they
-                // overlap in a cascade rather than sharing one full-height axis: punch
-                // volume in the top half (0/4-2/4), guard height in the middle half
-                // (1/4-3/4), movement in the bottom half (2/4-4/4). The fill under each
-                // line still drops all the way to the shared chart bottom, though - only
-                // the lines themselves are staggered, not the fills.
+                // Guard height and movement are staggered into their own half-height
+                // bands so they overlap in a cascade: guard height in the middle half
+                // (1/4-3/4), movement in the bottom half (2/4-4/4), both floored at
+                // their own band's bottom edge (0.75 and 1.0 respectively). Punch volume
+                // keeps its peak at the very top (0/4, unchanged) but its floor sits at
+                // 0.875 - halfway between guard height's floor and movement's floor.
                 fun yForBand(value: Float, bandTopFraction: Float, bandBottomFraction: Float): Float {
                     val normalized = value.coerceIn(0f, 1f)
                     val topY = chartTop + chartHeight * bandTopFraction
@@ -207,7 +207,7 @@ fun PerformanceGraph(
                     return bottomY + (topY - bottomY) * normalized
                 }
 
-                fun yForPunchVolume(value: Float) = yForBand(value, bandTopFraction = 0f, bandBottomFraction = 0.5f)
+                fun yForPunchVolume(value: Float) = yForBand(value, bandTopFraction = 0f, bandBottomFraction = 0.875f)
                 fun yForGuardHeight(value: Float) = yForBand(value, bandTopFraction = 0.25f, bandBottomFraction = 0.75f)
                 fun yForMovement(value: Float) = yForBand(value, bandTopFraction = 0.5f, bandBottomFraction = 1f)
 

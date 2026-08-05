@@ -34,14 +34,17 @@ import java.io.File
  * Video-only (no audio track/permission) - the on-device pipeline only ever looks
  * at pose landmarks, so there's nothing to gain from asking for microphone access.
  */
-class CameraRecordingController(private val context: Context) {
+class CameraRecordingController(
+    private val context: Context,
+    initialLensFacing: Int = CameraSelector.LENS_FACING_BACK,
+) {
     private var cameraProvider: ProcessCameraProvider? = null
     private var videoCapture: VideoCapture<Recorder>? = null
     private var activeRecording: Recording? = null
     private var boundPreviewView: PreviewView? = null
     private var boundLifecycleOwner: LifecycleOwner? = null
 
-    private val lensFacingState = mutableIntStateOf(CameraSelector.LENS_FACING_BACK)
+    private val lensFacingState = mutableIntStateOf(initialLensFacing)
     val lensFacing: State<Int> get() = lensFacingState
 
     fun bind(previewView: PreviewView, lifecycleOwner: LifecycleOwner) {
@@ -169,7 +172,9 @@ fun CameraPreview(
 }
 
 @Composable
-fun rememberCameraRecordingController(): CameraRecordingController {
+fun rememberCameraRecordingController(
+    initialLensFacing: Int = CameraSelector.LENS_FACING_BACK,
+): CameraRecordingController {
     val context = LocalContext.current
-    return remember { CameraRecordingController(context.applicationContext) }
+    return remember { CameraRecordingController(context.applicationContext, initialLensFacing) }
 }
