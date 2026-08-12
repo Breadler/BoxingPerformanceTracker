@@ -124,10 +124,6 @@ python plot_graph_metrics.py --pose-frames data/user_pose_frames.csv --punch-win
 
 `graph_metrics.py`'s CSV output is the exact, unsmoothed data (punch volume always is; guard height/movement here too). `plot_graph_metrics.py` additionally smooths + downsamples guard height/movement and curve-fits all three purely for a readable chart — see the module docstrings for the smoothing/downsampling knobs (`--*-smoothing-ms`, `--downsample-bucket-ms`) if a plot looks too noisy or too flat.
 
-### Optional: legacy FastAPI server
-
-`api_server.py` predates the on-device Android app (it originally served `session_processing.py`'s pipeline over HTTP for a thin Android client). The app no longer talks to it — it's kept only as a convenience for running the full pipeline from a browser/curl without the Android app. `session_processing.py` itself is still current: it's the Python analogue of `OnDeviceSessionProcessor.kt`, useful for testing pipeline changes before porting them to Kotlin.
-
 ## Data files reference
 
 | File | What it is |

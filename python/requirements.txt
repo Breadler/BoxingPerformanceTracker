@@ -6,7 +6,4 @@ scikit-learn
 joblib
 matplotlib
 scipy
-fastapi
-uvicorn
-python-multipart
 m2cgen
