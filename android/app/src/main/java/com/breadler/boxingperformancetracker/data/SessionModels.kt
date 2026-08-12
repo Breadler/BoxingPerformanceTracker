@@ -71,26 +71,3 @@ data class SessionProcessingState(
 ) {
     val isActive: Boolean get() = isProcessing || completedSessionId != null || errorMessage != null
 }
-
-object SampleBoxingSessions {
-    private val sessions = listOf(
-        SessionSummary(
-            id = "round-01",
-            title = "Round 01",
-            dateLabel = "22/07/2026",
-            durationLabel = "3:26",
-            durationMs = 206_010L,
-            videoPath = "/sdk_gphone16k_x86_64/Stryko/testvideo_annotated.mp4",
-            punchWindowsCsvPath = "/sdk_gphone16k_x86_64/Stryko/predicted_punch_windows.csv",
-            punchWindows = listOf(
-                PunchWindow(280L, 570L),
-                PunchWindow(1000L, 1250L),
-                PunchWindow(2400L, 2690L),
-            ),
-        ),
-    )
-
-    fun all(): List<SessionSummary> = sessions
-
-    fun findById(sessionId: String): SessionSummary? = sessions.firstOrNull { it.id == sessionId }
-}
