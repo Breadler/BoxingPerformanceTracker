@@ -13,6 +13,10 @@ assessment during a sports training session using wearable inertial
 sensors. *Proceedings of the 11th International Conference on Wearable and
 Implantable Body Sensor Networks (BSN)*. https://doi.org/10.1109/BSN.2014.29
 
+Atif, Y. (2025, June 11). Rules of boxing: The ultimate guide for beginners
+and enthusiasts. *Spartans Boxing Club*.
+https://spartansboxing.com/blog/rules-of-boxing-the-ultimate-guide-for-beginners-and-enthusiasts/
+
 Badiola-Bengoa, A. & Mendez-Zorrilla, A. (2021). A systematic review of the
 application of camera-based human pose estimation in the field of sport and
 physical exercise. *Sensors*, 21(18), 5996.
@@ -35,13 +39,26 @@ Lahkar, B.K., Muller, A., Dumas, R., Reveret, L. & Robert, T. (2022).
 Accuracy of a markerless motion capture system in estimating upper
 extremity kinematics during boxing. *Frontiers in Sports and Active
 Living*, 4. https://doi.org/10.3389/fspor.2022.939980
-_(Cited in-text as "Magalhães et al." in both the old thesis and the
-article — worth double-checking author order/spelling against the actual
-paper before final submission.)_
+_(Verified 2026-08-14 directly against the published paper: author list is
+Lahkar, Muller, Dumas, Reveret, Robert, exactly as listed above. The old
+thesis and article both cited this in-text as "Magalhães et al.", which
+does not match any author on the paper; `02_literature_review.md` §2.3.4
+has been corrected to "Lahkar et al." accordingly.)_
 
 Lin, J., Xie, X., Wu, W., Xu, S., Liu, C., Hudoyberdi, T. & Chen, X. (2023).
 Model transfer from 2D to 3D study for boxing pose estimation. *Frontiers
 in Neurorobotics*, 17. https://doi.org/10.3389/fnbot.2023.1148545
+
+Malcher, J., Biebert, D., Chen, K.-H., Buschjäger, S., Hakert, C. & Chen,
+J.-J. (2024). Language-based deployment optimization for random forests
+(Invited paper). *Proceedings of the 25th ACM SIGPLAN/SIGBED International
+Conference on Languages, Compilers, and Tools for Embedded Systems
+(LCTES '24)*, 58–61. https://doi.org/10.1145/3652032.3659366
+_(Added 2026-08-14, resolving the "still needed" citation gap below: found
+via search, author list and page numbers verified against DBLP. Directly
+on-topic, language/compiler-based deployment optimization for Random
+Forest models on embedded targets, cited in §4.4.2 alongside the
+RandomForest-via-m2cgen decision.)_
 
 Nazrin Aiman Azmi & Wan Ahmad Munsif Wan Pa. (2025). Evaluating Malaysian
 university athletes' perceptions of AI benefits, risks, and acceptance in
@@ -75,13 +92,3 @@ Stenum, J., Cherry-Allen, K.M., Pyles, C.O., Reetzke, R.D., Vignos, M.F. &
 Roemmich, R.T. (2021). Applications of pose estimation in human health and
 performance across the lifespan. *Sensors*, 21(21), 7315.
 https://doi.org/10.3390/s21217315
-
-## Still needed
-- §2.2.1 (Boxing Fundamentals, new) — an official rules body (World Boxing/
-  AIBA) or sports-science textbook citation for boxing rules/scoring
-  criteria. Currently marked `[CITATION NEEDED]` in
-  `02_literature_review.md`.
-- §4.3.2 — a citable source for on-device model portability/transpilation
-  (train-once-deploy-anywhere for classical ML), as justification alongside
-  the RandomForest-via-m2cgen decision. m2cgen itself
-  (https://github.com/BayesWitnesses/m2cgen) is a tool, not a citable paper.

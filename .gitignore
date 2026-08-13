@@ -36,3 +36,6 @@ python/data/*.png
 # OS specific
 .DS_Store
 Thumbs.db
+
+# Private, local-only notes (not for the thesis or version control)
+PRIVATE-*.md

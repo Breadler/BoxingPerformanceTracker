@@ -83,7 +83,7 @@ failure.
 Python-side punch volume was first implemented on the same uniform
 sliding-window grid as guard height/movement (`punch_volume.
 compute_punch_volume()`), feeding `graph_metrics.py`'s merge per §3.3.7/
-§4.2.6. Within that same Python implementation pass, `compute_punch_volume_
+§4.3.6. Within that same Python implementation pass, `compute_punch_volume_
 keyframes()` was then built on top of the same combo-detection logic
 (`build_punch_combos`) as a refinement: sparse points at each punch's own
 end time instead of a value sampled onto the shared grid, so the signal's
@@ -101,7 +101,7 @@ cheaper on-device: no per-window combo lookup across the whole video, no
 smoothing/downsampling, just a line through data already held in memory.
 Both functions remain in `punch_volume.py` — the grid version stays wired
 into `graph_metrics.py`'s merge for the training/analysis pipeline; the
-keyframe version is what Android ports. Not listed in §4.4's differences
+keyframe version is what Android ports. Not listed in §4.5's differences
 table since it isn't one — it's part of the full Python implementation,
 same as everything else the app ports. Real implementation detail, fine
-for §4.3.3; not a limitation for §6.5.
+for §4.4.3; not a limitation for §6.5.
