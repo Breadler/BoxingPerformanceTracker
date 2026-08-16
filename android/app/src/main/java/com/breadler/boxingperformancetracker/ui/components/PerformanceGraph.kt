@@ -54,6 +54,7 @@ private const val LEGEND_DIMMED_ALPHA = 0.4f
 
 private enum class GraphMetric { PUNCH_VOLUME, GUARD_HEIGHT, MOVEMENT }
 
+// Punch volume / guard height / movement chart with scrub + legend toggles
 @Composable
 fun PerformanceGraph(
     durationMs: Long,
@@ -68,18 +69,14 @@ fun PerformanceGraph(
 
     val guardMovementSeries = remember(performancePoints, safeDuration) {
         if (performancePoints.isEmpty()) {
-            // No fabricated data: a flat zero line across the real duration is an honest
-            // "no predictions were produced" state, not a fake-looking curve.
+            // Empty state: flat zero line
             GuardMovementSeries(
                 guardHeight = listOf(0f, 0f),
                 movement = listOf(0f, 0f),
                 timestamps = listOf(0L, safeDuration),
             )
         } else {
-            // Mirrors graph_metrics.py's compute -> smooth -> downsample pipeline: the
-            // stored points are raw/exact, this is purely a display-time pass. Each series
-            // is min-max normalized to 0..1 here; the Canvas draw step below maps that
-            // into its own staggered band rather than one shared full-height axis.
+            // Smooth, downsample, normalize
             val sorted = performancePoints.sortedBy { it.timestampMs }
             val inferredStrideMs = sorted.zipWithNext()
                 .map { (a, b) -> b.timestampMs - a.timestampMs }
@@ -98,11 +95,7 @@ fun PerformanceGraph(
     }
 
     val punchVolumeSeries = remember(punchWindows, safeDuration) {
-        // Sparse, one point per punch (running count within its combo) plus a 0
-        // right before/after each combo, not smoothed/downsampled on this data
-        // itself - the curve drawn through these points is purely a display-time
-        // rounding, not averaging. Mirrors plot_graph_metrics.py's punch volume
-        // view, not the uniform grid.
+        // Punch volume keyframes
         val keyframes = GraphMetrics.computePunchVolumeKeyframes(punchWindows, safeDuration)
         PunchVolumeSeries(
             punchVolume = normalizeToUnitRange(keyframes.map { it.punchVolume.toDouble() }),
@@ -194,12 +187,7 @@ fun PerformanceGraph(
                     return chartLeft + chartWidth * fraction
                 }
 
-                // Guard height and movement are staggered into their own half-height
-                // bands so they overlap in a cascade: guard height in the middle half
-                // (1/4-3/4), movement in the bottom half (2/4-4/4), both floored at
-                // their own band's bottom edge (0.75 and 1.0 respectively). Punch volume
-                // keeps its peak at the very top (0/4, unchanged) but its floor sits at
-                // 0.875 - halfway between guard height's floor and movement's floor.
+                // Map value to its stacked band position
                 fun yForBand(value: Float, bandTopFraction: Float, bandBottomFraction: Float): Float {
                     val normalized = value.coerceIn(0f, 1f)
                     val topY = chartTop + chartHeight * bandTopFraction
@@ -249,10 +237,7 @@ fun PerformanceGraph(
                     alpha = movementAlpha,
                 )
 
-                // One dot per individual predicted punch, sitting exactly on the punch
-                // volume line at that punch's own end-time keyframe (see
-                // GraphMetrics.computePunchVolumeKeyframes) rather than a full-height
-                // bar, so a fast combo reads as a run of beads along the curve.
+                // Punch markers on the volume line
                 val punchVolumeByTimestamp = punchVolumeSeries.timestamps.zip(punchVolumeSeries.punchVolume).toMap()
                 punchWindows.forEach { window ->
                     val endMs = window.endMs.coerceIn(0L, safeDuration)
@@ -289,6 +274,7 @@ fun PerformanceGraph(
     }
 }
 
+// Clickable legend dot + label
 @Composable
 private fun LegendSwatch(
     color: Color,
@@ -309,30 +295,26 @@ private fun LegendSwatch(
     }
 }
 
-/** 1f when nothing is selected or [metric] is the selected one, [DIMMED_ALPHA]
- * otherwise - the "focus" effect for tapping a legend item. */
+// Legend focus alpha
 private fun seriesAlpha(selected: GraphMetric?, metric: GraphMetric): Float {
     return if (selected == null || selected == metric) 1f else DIMMED_ALPHA
 }
 
-/** Last series value at or before [atMs], for the playhead badge to track whichever
- * metric is currently focused. Falls back to the first point if [atMs] is earlier
- * than every sample. */
+// Playhead value lookup
 private fun valueAtOrBefore(timestamps: List<Long>, values: List<Float>, atMs: Long): Float {
     if (values.isEmpty()) return 0f
     val index = timestamps.indexOfLast { it <= atMs }
     return if (index >= 0) values[index] else values.first()
 }
 
-/** Same lookup as [valueAtOrBefore] but over the punch volume keyframes' raw integer
- * counts, so the playhead badge shows the running count within whichever combo covers
- * [atMs] (0 between combos) instead of a lifetime total that never resets. */
+// Playhead punch count lookup
 private fun rawValueAtOrBefore(timestamps: List<Long>, values: List<Int>, atMs: Long): Int {
     if (values.isEmpty()) return 0
     val index = timestamps.indexOfLast { it <= atMs }
     return if (index >= 0) values[index] else values.first()
 }
 
+// Draw one filled, smoothed line series
 private fun DrawScope.drawSeries(
     points: List<Pair<Long, Float>>,
     fillColor: Color,
@@ -351,8 +333,7 @@ private fun DrawScope.drawSeries(
         Offset(chartLeft + (chartWidth * fraction), yForValue(value))
     }
 
-    // Every series curves through its points now (including punch volume, previously
-    // straight point-to-point) for a softer, more polished look across the board.
+    // Smooth curve through points
     val linePath = buildSmoothPath(pixelPoints)
     val fillPath = Path().apply {
         addPath(linePath)
@@ -369,9 +350,7 @@ private fun DrawScope.drawSeries(
     )
 }
 
-/** Catmull-Rom spline through [pixelPoints], converted to cubic Bezier segments, so
- * even sharp punch on/off transitions render as the smooth curve seen in the design
- * rather than a jagged straight-line zigzag. Still passes exactly through every point. */
+// Catmull-Rom spline to cubic Bezier
 private fun buildSmoothPath(pixelPoints: List<Offset>): Path {
     val path = Path()
     if (pixelPoints.isEmpty()) return path
@@ -393,8 +372,7 @@ private fun buildSmoothPath(pixelPoints: List<Offset>): Path {
     return path
 }
 
-/** Circular badge on the playhead. Shows the punch count by default, or the
- * currently focused metric's value (as a percentage) when one is selected. */
+// Playhead count/value badge
 private fun DrawScope.drawCountLabel(
     label: String,
     x: Float,
@@ -407,8 +385,7 @@ private fun DrawScope.drawCountLabel(
         textAlign = Paint.Align.CENTER
     }
 
-    // Radius grows to fit longer labels (e.g. "100%") while staying circular for
-    // short ones (e.g. "5").
+    // Radius fits label width
     val radius = (paint.measureText(label) / 2f + 12f).coerceAtLeast(22f)
     val center = Offset(x.coerceAtLeast(radius), y + radius)
     drawCircle(
@@ -424,21 +401,21 @@ private fun DrawScope.drawCountLabel(
     )
 }
 
+// Normalized guard height / movement points ready to draw
 private data class GuardMovementSeries(
     val guardHeight: List<Float>,
     val movement: List<Float>,
     val timestamps: List<Long>,
 )
 
+// Normalized punch volume points ready to draw
 private data class PunchVolumeSeries(
     val punchVolume: List<Float>,
     val rawPunchVolume: List<Int>,
     val timestamps: List<Long>,
 )
 
-/** Min-max scales [values] to 0..1 for a shared y-axis. A constant series maps to a
- * flat 0 if that constant is ~zero (e.g. "no punches at all"), else a flat 0.5 -
- * a constant non-zero value has no natural place on a relative 0..1 scale. */
+// Min-max normalize to 0..1
 private fun normalizeToUnitRange(values: List<Double>): List<Float> {
     if (values.isEmpty()) return emptyList()
     val minValue = values.min()

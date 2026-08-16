@@ -27,10 +27,7 @@ def curve_for_display(
     points_per_segment: int = 12,
     clip_min: float | None = None,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Cubic-spline interpolation purely to round off the line for readability.
-    Passes through the same already-smoothed/downsampled points - this doesn't
-    add or hide information, it just curves the segments between them instead
-    of drawing straight lines, so peaks/valleys look rounded instead of sharp."""
+    """Cubic-spline interpolation for display smoothing."""
     x_values = x.to_numpy(dtype=float)
     y_values = y.to_numpy(dtype=float)
     if len(x_values) < 4:
@@ -44,6 +41,7 @@ def curve_for_display(
     return x_smooth, y_smooth
 
 
+# Compute graph metrics and save a 3-panel plot to a PNG
 def plot_graph_metrics(
     pose_frames_path: Path,
     punch_windows_path: Path,
@@ -69,15 +67,11 @@ def plot_graph_metrics(
     if metrics.empty:
         raise ValueError("No graph metrics were computed - check the input files are for the same video.")
 
-    # Punch volume: sparse keyframes, one point per punch's own end time (plus
-    # 0 markers bounding each combo), not the dense uniform grid - so the
-    # curve below climbs point-to-point through each punch instead of holding
-    # flat for a punch's duration like a barchart. compute_graph_metrics()'s
-    # uniform-grid punch_volume (used by the merge/app) is unaffected.
+    # Punch volume keyframes
     punch_volume = compute_punch_volume_keyframes(pose_frames, punch_windows, combo_gap_ms=combo_gap_ms)
     punch_volume_time_seconds = punch_volume["timestamp_ms"] / 1000.0
 
-    # Guard height / movement: smooth + downsample for a stable, readable trend.
+    # Guard height / movement: smooth + downsample
     guard_movement = smooth_graph_metrics(
         metrics,
         stride_ms=stride_ms,
@@ -89,20 +83,20 @@ def plot_graph_metrics(
 
     fig, axes = plt.subplots(3, 1, figsize=(14, 9), sharex=True)
 
-    # No curve_for_display here on purpose: these are already sparse, one point
-    # per punch, so a plain line just connects them directly - a diagonal ramp
-    # up through each punch and back down, no smoothing/rounding on top.
+    # Punch volume subplot
     axes[0].plot(punch_volume_time_seconds, punch_volume["punch_volume"], color="crimson")
     axes[0].fill_between(punch_volume_time_seconds, punch_volume["punch_volume"], alpha=0.15, color="crimson")
     axes[0].set_ylabel("Punches per combo")
     axes[0].set_title("Punch Volume")
 
+    # Guard height subplot
     guard_height_x, guard_height_y = curve_for_display(guard_movement_time_seconds, guard_movement["guard_height"])
     axes[1].plot(guard_height_x, guard_height_y, color="royalblue")
     axes[1].axhline(0, color="gray", linewidth=0.8, linestyle="--")
     axes[1].set_ylabel("nose_y - wrist_y")
     axes[1].set_title("Guard Height")
 
+    # Movement subplot
     movement_x, movement_y = curve_for_display(
         guard_movement_time_seconds, guard_movement["movement"], clip_min=0.0,
     )
@@ -119,6 +113,7 @@ def plot_graph_metrics(
     print(f"Saved plot to {output_path}")
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Plot punch-volume, guard-height, and movement graph metrics for a test session.",

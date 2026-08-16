@@ -8,6 +8,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
+// App-wide Material color scheme
 private val LightColorScheme = lightColorScheme(
     primary = StrykoRed,
     secondary = StrykoBlue,
@@ -19,6 +20,7 @@ private val LightColorScheme = lightColorScheme(
     onSurface = StrykoBlue,
 )
 
+// Root MaterialTheme wrapper with app colors and typography
 @Composable
 fun BoxingPerformanceTrackerTheme(content: @Composable () -> Unit) {
     MaterialTheme(

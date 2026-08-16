@@ -13,21 +13,7 @@ def export_random_forest_java(
     package_name: str,
     class_name: str,
 ) -> list[str]:
-    """Ports the trained RandomForestClassifier (predict_punches.py's model, the
-    one validated throughout this project's Python-side testing) to a plain Java
-    class via m2cgen, for direct use as the Android app's on-device punch
-    classifier - replacing a separately-trained TFLite network that, evaluated
-    with a proper video-grouped train/validation split, came in at ~50% held-out
-    accuracy (essentially chance) on only 350 labeled rows across 111 videos.
-    Porting the already-validated RandomForest directly removes that model
-    entirely, instead of training a second, independent model on the same thin
-    dataset.
-
-    The exported class exposes `public static double[] score(double[] input)`,
-    returning per-class vote fractions (== predict_proba) in the order of
-    model.classes_. The caller is responsible for feeding `input` in exactly
-    model's feature_columns order - the generated code has no column-name
-    metadata of its own to validate against."""
+    """Export the trained RandomForestClassifier to a Java class via m2cgen."""
     try:
         import m2cgen
     except ModuleNotFoundError as exc:
@@ -35,6 +21,7 @@ def export_random_forest_java(
             "m2cgen is required for export. Install it in your Python environment with: pip install m2cgen"
         ) from exc
 
+    # Load the trained model and convert it to Java source
     artifact = joblib.load(model_path)
     model = artifact["model"]
     feature_columns = list(artifact["feature_columns"])
@@ -55,6 +42,7 @@ def export_random_forest_java(
     return feature_columns
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Export the trained RandomForest punch classifier to a Java class for the Android app.",

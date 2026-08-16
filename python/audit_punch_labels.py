@@ -6,10 +6,12 @@ from pathlib import Path
 import pandas as pd
 
 
+# Cross-check punch labels against pose frames and print a report
 def audit_punch_labels(pose_frames_path: Path, punch_windows_path: Path) -> None:
     pose_frames = pd.read_csv(pose_frames_path)
     punch_windows = pd.read_csv(punch_windows_path)
 
+    # Validate required columns
     required_pose_columns = {"video_id", "frame_index", "timestamp_ms"}
     missing_pose_columns = required_pose_columns - set(pose_frames.columns)
     has_frame_labels = {"start_frame", "end_frame"}.issubset(punch_windows.columns)
@@ -28,6 +30,7 @@ def audit_punch_labels(pose_frames_path: Path, punch_windows_path: Path) -> None
         punch_windows["end_frame"] = punch_windows["end_frame"].astype(int)
         punch_windows["duration_frames"] = punch_windows["end_frame"] - punch_windows["start_frame"] + 1
 
+    # Convert frame labels to timestamps if needed
     if not has_time_labels:
         frame_lookup = {
             video_id: frames.sort_values("frame_index").reset_index(drop=True)
@@ -50,6 +53,7 @@ def audit_punch_labels(pose_frames_path: Path, punch_windows_path: Path) -> None
 
     punch_windows["duration_ms"] = punch_windows["end_ms"] - punch_windows["start_ms"]
 
+    # Video coverage summary
     pose_video_ids = set(pose_frames["video_id"])
     label_video_ids = set(punch_windows["video_id"])
     missing_videos = sorted(label_video_ids - pose_video_ids)
@@ -69,6 +73,7 @@ def audit_punch_labels(pose_frames_path: Path, punch_windows_path: Path) -> None
         print("\nPunch duration summary, frames")
         print(punch_windows["duration_frames"].describe().to_string())
 
+    # Flag invalid windows
     if has_frame_labels:
         invalid_windows = punch_windows[punch_windows["end_frame"] < punch_windows["start_frame"]]
         if not invalid_windows.empty:
@@ -80,6 +85,7 @@ def audit_punch_labels(pose_frames_path: Path, punch_windows_path: Path) -> None
         print("\nInvalid time windows")
         print(invalid_time_windows.to_string(index=False))
 
+    # Flag suspiciously short/long labels
     very_short = punch_windows[punch_windows["duration_ms"] <= 80]
     very_long = punch_windows[punch_windows["duration_ms"] >= 800]
     if not very_short.empty:
@@ -89,6 +95,7 @@ def audit_punch_labels(pose_frames_path: Path, punch_windows_path: Path) -> None
         print("\nVery long labels, check these manually")
         print(very_long.to_string(index=False))
 
+    # Flag labels outside the available pose frame range
     frame_ranges = pose_frames.groupby("video_id")["frame_index"].agg(["min", "max"])
     out_of_range_rows = []
     if has_frame_labels:
@@ -113,6 +120,7 @@ def audit_punch_labels(pose_frames_path: Path, punch_windows_path: Path) -> None
         print(pd.DataFrame(out_of_range_rows).to_string(index=False))
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(description="Audit punch label windows against pose frames.")
     parser.add_argument("--pose-frames", type=Path, default=Path("data/pose_frames.csv"))

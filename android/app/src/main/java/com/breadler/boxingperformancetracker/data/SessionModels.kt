@@ -1,10 +1,12 @@
 package com.breadler.boxingperformancetracker.data
 
+// One merged punch event
 data class PunchWindow(
     val startMs: Long,
     val endMs: Long,
 )
 
+// One sliding-window classifier prediction
 data class PunchPrediction(
     val startMs: Long,
     val endMs: Long,
@@ -12,14 +14,14 @@ data class PunchPrediction(
     val punchProbability: Double,
 )
 
+// One graph metrics sample point
 data class PerformancePoint(
     val timestampMs: Long,
-    /** nose_y - highest-guarding wrist_y. Positive = guard above the head, shrinks/negative as it drops. */
-    val guardHeight: Double,
-    /** Hip-midpoint speed on x/z (footwork), excluding vertical bob. */
-    val movement: Double,
+    val guardHeight: Double, // nose-to-wrist vertical gap
+    val movement: Double, // hip center speed (x/z)
 )
 
+// Common fields shown on a session list card
 interface SessionCardItem {
     val id: String
     val title: String
@@ -29,28 +31,26 @@ interface SessionCardItem {
     val thumbnailUri: String?
 }
 
+// Full domain model for one processed session
 data class SessionSummary(
     override val id: String,
     override val title: String,
     override val dateLabel: String,
     override val durationLabel: String,
     val durationMs: Long,
-    /** Legacy field for file paths. Prefer [sourceVideoUri] or [annotatedVideoUri]. */
-    val videoPath: String? = null,
+    val videoPath: String? = null, // legacy, prefer sourceVideoUri/annotatedVideoUri
     val punchWindowsCsvPath: String? = null,
     val punchWindows: List<PunchWindow> = emptyList(),
-    /** URI for the raw imported video. */
-    val sourceVideoUri: String? = null,
-    /** URI for the processed video with overlays. */
-    val annotatedVideoUri: String? = null,
-    /** URI for a still-frame thumbnail generated from the video at import time. */
-    override val thumbnailUri: String? = null,
+    val sourceVideoUri: String? = null, // raw imported video
+    val annotatedVideoUri: String? = null, // processed video with overlays
+    override val thumbnailUri: String? = null, // still-frame thumbnail
     val sourceVideoName: String? = null,
     val punchPredictions: List<PunchPrediction> = emptyList(),
     val performancePoints: List<PerformancePoint> = emptyList(),
     override val punchCount: Int = punchWindows.size,
 ) : SessionCardItem
 
+// Stages of the on-device processing pipeline, with UI labels
 enum class ProcessingPhase(val label: String) {
     COPYING("Copying video..."),
     LOADING_MODELS("Loading models..."),
@@ -59,12 +59,12 @@ enum class ProcessingPhase(val label: String) {
     SAVING("Saving..."),
 }
 
+// Current state of the active/queued session import
 data class SessionProcessingState(
     val isProcessing: Boolean = false,
     val sessionName: String = "",
     val phase: ProcessingPhase? = null,
-    /** 0f..1f progress through the local pose+punch analysis pipeline, or null while indeterminate. */
-    val progress: Float? = null,
+    val progress: Float? = null, // 0f..1f, null while indeterminate
     val startTimeMs: Long = 0L,
     val errorMessage: String? = null,
     val completedSessionId: String? = null,

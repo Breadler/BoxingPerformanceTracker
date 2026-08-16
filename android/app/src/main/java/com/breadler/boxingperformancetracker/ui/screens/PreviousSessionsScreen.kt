@@ -25,6 +25,7 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoBackground
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 
+// Scrollable list of processed sessions, or an empty-state message
 @Composable
 fun PreviousSessionsScreen(
     sessions: List<SessionSummary>,
@@ -69,6 +70,7 @@ fun PreviousSessionsScreen(
     }
 }
 
+// Top bar with an exit button
 @Composable
 private fun RowHeader(
     onBack: () -> Unit,

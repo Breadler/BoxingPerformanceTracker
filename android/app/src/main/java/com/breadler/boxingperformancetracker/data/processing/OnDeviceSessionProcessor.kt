@@ -10,18 +10,7 @@ import com.breadler.boxingperformancetracker.data.PunchWindow
 import java.io.File
 
 class OnDeviceSessionProcessor(private val context: Context) {
-    /**
-     * Runs the full local user-inference workflow for one imported video: MediaPipe
-     * pose extraction (+ annotated skeleton video), RandomForest sliding-window
-     * punch classification, and predicted punch window merging.
-     *
-     * [annotatedOutputFile] is a session-specific path so each imported video keeps
-     * its own independent annotated video, pose data, and predictions.
-     *
-     * Throws with a descriptive message if no pose data could be extracted at all,
-     * instead of silently returning an empty result that would look like a
-     * successful-but-blank session.
-     */
+    // Full session processing pipeline
     fun process(
         videoUri: Uri,
         annotatedOutputFile: File? = null,
@@ -70,6 +59,7 @@ class OnDeviceSessionProcessor(private val context: Context) {
         )
     }
 
+    // Sliding-window classification
     private fun buildPredictions(observations: List<FrameObservation>): List<PunchPrediction> {
         val minMs = observations.minOfOrNull { it.timestampMs } ?: return emptyList()
         val maxMs = observations.maxOfOrNull { it.timestampMs } ?: return emptyList()
@@ -97,6 +87,7 @@ class OnDeviceSessionProcessor(private val context: Context) {
         }
     }
 
+    // Merge overlapping punch windows
     private fun mergePunchWindows(predictions: List<PunchPrediction>): List<PunchWindow> {
         val punchRows = predictions.filter { it.prediction == "punch" }.sortedBy { it.startMs }
         if (punchRows.isEmpty()) return emptyList()

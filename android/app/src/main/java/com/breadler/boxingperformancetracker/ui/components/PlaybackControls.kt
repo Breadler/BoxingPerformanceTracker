@@ -23,6 +23,7 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
 
+// Scrub bar, time ticks, and play/pause button for session video playback
 @Composable
 fun PlaybackControls(
     currentPositionMs: Long,
@@ -84,11 +85,13 @@ fun PlaybackControls(
     }
 }
 
+// Evenly spaced tick timestamps under the scrub bar
 private fun timeDivisions(durationMs: Long, tickCount: Int = 6): List<Long> {
     if (tickCount < 2) return listOf(0L, durationMs)
     return (0 until tickCount).map { index -> durationMs * index / (tickCount - 1) }
 }
 
+// Format milliseconds as m:ss
 private fun formatTimeLabel(timeMs: Long): String {
     val totalSeconds = (timeMs / 1000).coerceAtLeast(0)
     val minutes = totalSeconds / 60

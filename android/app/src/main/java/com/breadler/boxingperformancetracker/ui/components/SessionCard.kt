@@ -63,6 +63,7 @@ import kotlinx.coroutines.withContext
 
 private const val HOLD_TO_DELETE_MS = 900
 
+// Session list row: thumbnail, title/date/duration, play button, hold-to-delete
 @Composable
 fun SessionCard(
     session: SessionCardItem,
@@ -150,8 +151,7 @@ fun SessionCard(
     }
 }
 
-/** In-memory only - thumbnails are already small (max 480px) local JPEGs, this just
- * avoids re-decoding one on every scroll pass through the list. */
+// In-memory thumbnail cache
 private object SessionThumbnailCache {
     private val cache = mutableMapOf<String, Bitmap?>()
 
@@ -161,6 +161,7 @@ private object SessionThumbnailCache {
     }
 }
 
+// Decoded, cached thumbnail image for one session
 @Composable
 private fun SessionThumbnail(
     thumbnailUri: String?,
@@ -199,10 +200,7 @@ private fun SessionThumbnail(
     }
 }
 
-/** Press-and-hold confirmation: a red fill grows from the left over
- * [HOLD_TO_DELETE_MS] while held, triggering [onDeleteConfirmed] if the hold
- * completes. Releasing early resets the fill back to empty instead of deleting -
- * a plain tap can't trigger it, only a sustained hold. */
+// Press-and-hold delete confirmation
 @Composable
 private fun HoldToDeleteBar(
     onDeleteConfirmed: () -> Unit,

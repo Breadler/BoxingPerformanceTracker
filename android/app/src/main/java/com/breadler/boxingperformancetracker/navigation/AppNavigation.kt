@@ -26,6 +26,7 @@ import com.breadler.boxingperformancetracker.ui.screens.ProcessingScreen
 import com.breadler.boxingperformancetracker.ui.screens.SessionPlaybackScreen
 import com.breadler.boxingperformancetracker.ui.viewmodel.StrykoViewModel
 
+// Navigation route names
 private object Routes {
     const val Home = "home"
     const val NewSession = "newSession"
@@ -37,6 +38,7 @@ private object Routes {
     fun sessionPlayback(sessionId: String): String = "$SessionPlayback/$sessionId"
 }
 
+// Root nav host wiring all screens and shared view model state
 @Composable
 fun AppNavigation() {
     val navController = rememberNavController()
@@ -51,6 +53,7 @@ fun AppNavigation() {
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentBackStackEntry?.destination?.route
 
+    // Navigate to the just-finished session and clear its status
     fun openCompletedSession() {
         importState.completedSessionId?.let { sessionId ->
             navController.navigate(Routes.sessionPlayback(sessionId)) {
@@ -60,23 +63,19 @@ fun AppNavigation() {
         viewModel.acknowledgeCompletion()
     }
 
+    // Pop back to the home screen
     fun exitToHome() {
         navController.popBackStack(Routes.Home, inclusive = false)
     }
 
-    // If the processing screen is the current destination but there's nothing left to show
-    // there (no active import, nothing queued), skip past it automatically - e.g. after
-    // opening a finished session and then exiting session playback, which lands back on what
-    // would otherwise be a dead loading screen. Gated on currentRoute (not left as a check
-    // inside ProcessingScreen itself) so it can't fire while ProcessingScreen is still
-    // transiently composed during the transition away from it - that raced with "open session"
-    // navigation and popped it right back off.
+    // Auto-skip empty processing screen
     LaunchedEffect(currentRoute, importState.isActive, queuedSessionNames.isEmpty()) {
         if (currentRoute == Routes.Processing && !importState.isActive && queuedSessionNames.isEmpty()) {
             navController.popBackStack()
         }
     }
 
+    // Docked processing status bar, shown on every screen but Processing itself
     Scaffold(
         bottomBar = {
             if (importState.isActive && currentRoute != Routes.Processing) {
@@ -142,6 +141,7 @@ fun AppNavigation() {
                     onDeleteSession = viewModel::deleteSession,
                 )
             }
+            // Session playback, loading the session by id if not already in memory
             composable(
                 route = "${Routes.SessionPlayback}/{${Routes.SessionIdArg}}",
                 arguments = listOf(navArgument(Routes.SessionIdArg) { type = NavType.StringType }),

@@ -23,6 +23,7 @@ METADATA_COLUMNS = {
 LABEL_COLUMN = "label"
 
 
+# Load a trained model artifact (joblib or pickle fallback)
 def load_model_artifact(model_path: Path) -> dict[str, object]:
     try:
         import joblib
@@ -33,6 +34,7 @@ def load_model_artifact(model_path: Path) -> dict[str, object]:
             return pickle.load(model_file)
 
 
+# Build sliding-window feature rows to classify
 def build_prediction_windows(
     pose_frames: pd.DataFrame,
     *,
@@ -81,6 +83,7 @@ def build_prediction_windows(
     return predictions.drop(columns=[LABEL_COLUMN])
 
 
+# Merge overlapping punch-classified windows into punch events
 def merge_punch_windows(predictions: pd.DataFrame) -> pd.DataFrame:
     punch_rows = predictions[predictions["prediction"] == "punch"].copy()
     if punch_rows.empty:
@@ -146,6 +149,7 @@ def merge_punch_windows(predictions: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(merged_rows)
 
 
+# Run the trained model over a video's pose frames and save punch windows
 def predict_punches(
     pose_frames_path: Path,
     model_path: Path,
@@ -168,6 +172,7 @@ def predict_punches(
         include_raw_landmark_features=False,
     )
 
+    # Retry with raw landmark features if the model expects them
     missing_columns = [column for column in feature_columns if column not in prediction_windows.columns]
     if missing_columns:
         prediction_windows = build_prediction_windows(
@@ -184,9 +189,11 @@ def predict_punches(
             f"Missing columns: {missing_columns[:10]}"
         )
 
+    # Classify each window
     x = prediction_windows[feature_columns].fillna(0.0)
     prediction_windows["prediction"] = model.predict(x)
 
+    # Apply an optional custom probability threshold
     if hasattr(model, "predict_proba") and "punch" in getattr(model, "classes_", []):
         punch_index = list(model.classes_).index("punch")
         prediction_windows["punch_probability"] = model.predict_proba(x)[:, punch_index]
@@ -195,6 +202,7 @@ def predict_punches(
                 lambda probability: "punch" if probability >= punch_threshold else "no_punch"
             )
 
+    # Merge into punch events and save
     merged = merge_punch_windows(prediction_windows)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(output_path, index=False)
@@ -208,6 +216,7 @@ def predict_punches(
     return merged
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run a trained Random Forest on user pose frames to find punch moments.",

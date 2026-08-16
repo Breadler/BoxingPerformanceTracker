@@ -23,6 +23,7 @@ import androidx.compose.material3.Button
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import androidx.compose.ui.unit.sp
 
+// Large pill-shaped icon button used on the home screen
 @Composable
 fun MainActionCard(
     title: String,

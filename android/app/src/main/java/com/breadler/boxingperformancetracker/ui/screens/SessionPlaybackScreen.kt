@@ -31,6 +31,7 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 
+// Video playback + performance graph for one finished session
 @Composable
 fun SessionPlaybackScreen(
     session: SessionSummary,
@@ -40,6 +41,7 @@ fun SessionPlaybackScreen(
 ) {
     StrykoSystemBars(statusBarColor = StrykoRed, navigationBarColor = StrykoRed)
 
+    // Pick the best available video source: annotated, then raw, then legacy path
     val videoUri = remember(session.annotatedVideoUri, session.sourceVideoUri, session.videoPath) {
         val uriString = session.annotatedVideoUri.takeIf { !it.isNullOrBlank() }
             ?: session.sourceVideoUri.takeIf { !it.isNullOrBlank() }

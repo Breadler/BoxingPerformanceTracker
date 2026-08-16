@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 import pandas as pd
 
+# Model download location and landmark constants
 POSE_LANDMARKER_MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/pose_landmarker/"
     "pose_landmarker_lite/float16/1/pose_landmarker_lite.task"
@@ -92,6 +93,7 @@ POSE_CONNECTIONS = [
 METADATA_COLUMNS = ("video_id", "frame_index", "timestamp_ms", "pose_detected")
 
 
+# Summary of one processed video
 @dataclass
 class VideoProcessingResult:
     video_path: Path
@@ -100,6 +102,7 @@ class VideoProcessingResult:
     annotated_path: Path | None = None
 
 
+# Resolve landmark subset by name
 def get_landmark_indices(landmark_set: str) -> tuple[int, ...]:
     if landmark_set == "boxing":
         return BOXING_LANDMARK_INDICES
@@ -108,6 +111,7 @@ def get_landmark_indices(landmark_set: str) -> tuple[int, ...]:
     raise ValueError(f"Unsupported landmark set: {landmark_set}")
 
 
+# Build per-axis column names for each landmark
 def get_landmark_feature_names(landmark_indices: tuple[int, ...]) -> list[str]:
     feature_names: list[str] = []
     for landmark_index in landmark_indices:
@@ -117,6 +121,7 @@ def get_landmark_feature_names(landmark_indices: tuple[int, ...]) -> list[str]:
     return feature_names
 
 
+# Use the given model, the cached default, or download it
 def resolve_model_path(model_path: Path | None) -> Path:
     if model_path is not None:
         if not model_path.exists():
@@ -132,10 +137,12 @@ def resolve_model_path(model_path: Path | None) -> Path:
     return DEFAULT_MODEL_PATH
 
 
+# Default path for the annotated review video
 def annotated_output_path(video_path: Path) -> Path:
     return video_path.parent / "annotated" / f"{video_path.stem}_annotated.mp4"
 
 
+# Resolve --video / --input-dir into a list of video files
 def collect_video_paths(video: Path | None, input_dir: Path | None) -> list[Path]:
     if video is not None and input_dir is not None:
         raise ValueError("Pass either --video or --input-dir, not both.")
@@ -162,6 +169,7 @@ def collect_video_paths(video: Path | None, input_dir: Path | None) -> list[Path
     return videos
 
 
+# Draw skeleton points and connecting lines on a frame
 def draw_pose(frame, landmarks) -> None:
     height, width = frame.shape[:2]
     points: list[tuple[int, int]] = []
@@ -187,6 +195,7 @@ def draw_pose(frame, landmarks) -> None:
         )
 
 
+# Draw the frame number in the corner
 def draw_frame_label(frame, frame_index: int) -> None:
     cv2.putText(
         frame,
@@ -200,6 +209,7 @@ def draw_frame_label(frame, frame_index: int) -> None:
     )
 
 
+# Flatten landmark x/y/z/visibility into a feature list
 def landmarks_to_features(landmarks, landmark_indices: tuple[int, ...]) -> list[float]:
     return [
         coord
@@ -213,6 +223,7 @@ def landmarks_to_features(landmarks, landmark_indices: tuple[int, ...]) -> list[
     ]
 
 
+# Append pose rows to the output CSV
 def append_rows_to_csv(
     rows: list[dict[str, object]],
     output_csv: Path,
@@ -232,6 +243,7 @@ def append_rows_to_csv(
     )
 
 
+# Run MediaPipe pose extraction over a video and write pose rows to CSV
 def process_video(
     video_path: Path,
     output_csv: Path,
@@ -245,6 +257,7 @@ def process_video(
     if frame_stride < 1:
         raise ValueError("frame_stride must be at least 1")
 
+    # Set up model, landmarks, and video capture
     resolved_model_path = resolve_model_path(model_path)
     landmark_indices = get_landmark_indices(landmark_set)
     feature_names = get_landmark_feature_names(landmark_indices)
@@ -265,6 +278,7 @@ def process_video(
         capture.release()
         raise ValueError(f"Could not read video dimensions: {video_path}")
 
+    # Optional annotated review video writer
     writer: cv2.VideoWriter | None = None
     annotated_path: Path | None = None
     if write_annotated:
@@ -277,6 +291,7 @@ def process_video(
             (frame_width, frame_height),
         )
 
+    # Load MediaPipe pose landmarker
     mp = importlib.import_module("mediapipe")
     pose_module = importlib.import_module("mediapipe.tasks.python.vision.pose_landmarker")
     base_options_module = importlib.import_module("mediapipe.tasks.python.core.base_options")
@@ -297,6 +312,7 @@ def process_video(
     pose_frames = 0
     frame_index = 0
 
+    # Walk every frame, running pose detection on the sampled ones
     with pose_module.PoseLandmarker.create_from_options(options) as pose_landmarker:
         while True:
             success, frame = capture.read()
@@ -341,6 +357,7 @@ def process_video(
                         row[name] = np.nan
                     frame_rows.append(row)
 
+            # Write the annotated frame if requested
             if writer is not None:
                 output_frame = frame.copy()
                 if pose_landmarks is not None:
@@ -355,6 +372,7 @@ def process_video(
     if processed_frames == 0:
         raise ValueError(f"No frames were processed for video: {video_path}")
 
+    # Save results
     append_rows_to_csv(frame_rows, output_csv, csv_columns, write_header=write_header)
 
     print(
@@ -372,6 +390,7 @@ def process_video(
     )
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Extract per-frame MediaPipe pose features and optionally write annotated review videos.",
@@ -414,6 +433,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Process every video, collecting successes and failures
     video_paths = collect_video_paths(args.video, args.input_dir)
     write_header = not args.output.exists()
     failures: list[tuple[Path, str]] = []

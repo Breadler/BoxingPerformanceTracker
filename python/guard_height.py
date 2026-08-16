@@ -12,6 +12,7 @@ DEFAULT_SMOOTHING_MS = 1500
 POSE_FRAME_REQUIRED_COLUMNS = {"video_id", "timestamp_ms", "left_wrist_y", "right_wrist_y", "nose_y"}
 
 
+# Validate required columns are present
 def validate_pose_frames(pose_frames: pd.DataFrame) -> None:
     missing = POSE_FRAME_REQUIRED_COLUMNS - set(pose_frames.columns)
     if missing:
@@ -19,12 +20,7 @@ def validate_pose_frames(pose_frames: pd.DataFrame) -> None:
 
 
 def guard_height_for_window(window: pd.DataFrame) -> float:
-    """Mean of (nose_y - min(left_wrist_y, right_wrist_y)) across the window.
-    MediaPipe y is inverted (0 = top of frame), so a larger result means the
-    higher-guarding wrist is further above the head; near zero or negative
-    means the guard has dropped to chin/chest level or below. Uses whichever
-    wrist is higher, since one hand may be extended to punch while the other
-    still guards."""
+    """Mean nose-to-wrist vertical gap across the window."""
     raw_wrist_y = window[["left_wrist_y", "right_wrist_y"]].astype(float).min(axis=1)
     guard = (window["nose_y"].astype(float) - raw_wrist_y).dropna()
     return float(guard.mean()) if not guard.empty else 0.0
@@ -36,9 +32,7 @@ def compute_guard_height(
     window_ms: int = DEFAULT_WINDOW_MS,
     stride_ms: int = DEFAULT_STRIDE_MS,
 ) -> pd.DataFrame:
-    """Guard height on a uniform sliding-window grid. Raw - smoothing/downsampling
-    for display is graph_metrics.py's job (smooth_graph_metrics() /
-    downsample_graph_metrics()), not this stage's."""
+    """Guard height on a uniform sliding-window grid."""
     if window_ms < 1:
         raise ValueError("window_ms must be at least 1.")
     if stride_ms < 1:
@@ -76,6 +70,7 @@ def compute_guard_height(
     return pd.DataFrame(rows, columns=["video_id", "start_ms", "end_ms", "center_ms", "guard_height"])
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compute head-relative guard height on a uniform sliding-window grid.",

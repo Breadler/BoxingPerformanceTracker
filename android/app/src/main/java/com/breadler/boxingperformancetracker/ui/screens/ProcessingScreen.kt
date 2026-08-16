@@ -36,6 +36,7 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
 import kotlinx.coroutines.delay
 
+// Progress spinner + status for the active/finished import, plus the queue
 @Composable
 fun ProcessingScreen(
     importState: SessionProcessingState,
@@ -47,6 +48,7 @@ fun ProcessingScreen(
 ) {
     StrykoSystemBars(statusBarColor = StrykoRed, navigationBarColor = StrykoRed)
 
+    // Tick the elapsed-time counter while processing
     var elapsedSeconds by remember(importState.startTimeMs) { mutableLongStateOf(0L) }
     LaunchedEffect(importState.startTimeMs, importState.isProcessing) {
         if (!importState.isProcessing) return@LaunchedEffect
@@ -192,6 +194,7 @@ fun ProcessingScreen(
     }
 }
 
+// Row showing one video waiting in the processing queue
 @Composable
 private fun QueuedSessionCard(sessionName: String) {
     Surface(
@@ -221,6 +224,7 @@ private fun QueuedSessionCard(sessionName: String) {
     }
 }
 
+// Format seconds as mm:ss
 private fun formatElapsed(totalSeconds: Long): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60

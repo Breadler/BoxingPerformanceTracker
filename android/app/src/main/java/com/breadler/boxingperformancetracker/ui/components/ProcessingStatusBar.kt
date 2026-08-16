@@ -28,8 +28,7 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoTextMuted
 
-/** Docked status bar shown on every screen except the processing screen itself, so a video can
- * keep analyzing in the background while the user navigates freely. */
+// Docked processing status bar
 @Composable
 fun ProcessingStatusBar(
     state: SessionProcessingState,

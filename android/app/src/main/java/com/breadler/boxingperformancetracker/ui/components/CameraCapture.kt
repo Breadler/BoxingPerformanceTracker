@@ -29,11 +29,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import java.io.File
 
-/**
- * Owns the CameraX preview + video-capture use cases for one recording session.
- * Video-only (no audio track/permission) - the on-device pipeline only ever looks
- * at pose landmarks, so there's nothing to gain from asking for microphone access.
- */
+// CameraX preview + video capture controller
 class CameraRecordingController(
     private val context: Context,
     initialLensFacing: Int = CameraSelector.LENS_FACING_BACK,
@@ -47,6 +43,7 @@ class CameraRecordingController(
     private val lensFacingState = mutableIntStateOf(initialLensFacing)
     val lensFacing: State<Int> get() = lensFacingState
 
+    // Attach a preview surface and start the camera
     fun bind(previewView: PreviewView, lifecycleOwner: LifecycleOwner) {
         boundPreviewView = previewView
         boundLifecycleOwner = lifecycleOwner
@@ -60,10 +57,7 @@ class CameraRecordingController(
         )
     }
 
-    /** Switches between front/back and rebinds. No-ops while a recording is in
-     * progress - CameraX doesn't support swapping the camera under an active
-     * VideoCapture cleanly, and the caller should be disabling this during
-     * recording anyway. */
+    // Toggle front/back camera
     fun switchCamera() {
         if (activeRecording != null) return
         lensFacingState.intValue = if (lensFacingState.intValue == CameraSelector.LENS_FACING_BACK) {
@@ -74,6 +68,7 @@ class CameraRecordingController(
         rebind()
     }
 
+    // Bind preview + video capture use cases to the lifecycle
     private fun rebind() {
         val provider = cameraProvider ?: return
         val previewView = boundPreviewView ?: return
@@ -103,8 +98,7 @@ class CameraRecordingController(
         }
     }
 
-    /** Starts recording to [outputFile]. [onFinalized] fires exactly once, on the main
-     * executor, with the resulting file's Uri on success or null on failure. */
+    // Start recording to file
     fun startRecording(outputFile: File, onFinalized: (Uri?) -> Unit) {
         val capture = videoCapture
         if (capture == null) {
@@ -129,11 +123,13 @@ class CameraRecordingController(
             }
     }
 
+    // Stop the active recording
     fun stopRecording() {
         activeRecording?.stop()
         activeRecording = null
     }
 
+    // Release the camera
     fun unbind() {
         cameraProvider?.unbindAll()
         cameraProvider = null
@@ -147,9 +143,7 @@ class CameraRecordingController(
     }
 }
 
-/** Live camera preview, bound/unbound to [controller] across this composable's lifetime.
- * The preview starts as soon as this enters composition - callers don't need to do
- * anything else to "open" the camera. */
+// Live camera preview composable
 @Composable
 fun CameraPreview(
     controller: CameraRecordingController,
@@ -171,6 +165,7 @@ fun CameraPreview(
     }
 }
 
+// Remembers one controller across recompositions
 @Composable
 fun rememberCameraRecordingController(
     initialLensFacing: Int = CameraSelector.LENS_FACING_BACK,

@@ -7,15 +7,7 @@ import android.media.MediaFormat
 import android.media.MediaMuxer
 import java.io.File
 
-/**
- * Encodes a sequence of annotated bitmaps into a local H.264/MP4 file using
- * [MediaCodec] buffer input (no GPU/EGL surface needed) and [MediaMuxer].
- *
- * Buffer-input mode is used instead of a codec input Surface because it lets
- * every frame carry an explicit presentation timestamp matching the source
- * video's own timestampMs, mirroring how the Python pipeline keeps annotated
- * frames aligned with the original capture timeline.
- */
+// Encodes annotated bitmaps into an H.264/MP4 file
 class PoseVideoEncoder(
     outputFile: File,
     width: Int,
@@ -51,7 +43,7 @@ class PoseVideoEncoder(
         encoder.start()
     }
 
-    /** Encodes a single frame. [presentationTimeUs] must strictly increase between calls. */
+    // Encode a single frame
     fun encodeFrame(bitmap: Bitmap, presentationTimeUs: Long) {
         val safeTimeUs = if (frameCount == 0) {
             presentationTimeUs
@@ -86,7 +78,7 @@ class PoseVideoEncoder(
         drainEncoder(endOfStream = false)
     }
 
-    /** Flushes remaining frames, finalizes the mp4 container, and releases resources. */
+    // Flush and finalize output file
     fun finish() {
         val inputIndex = dequeueInputBufferBlocking()
         if (inputIndex >= 0) {
@@ -96,6 +88,7 @@ class PoseVideoEncoder(
         close()
     }
 
+    // Release encoder and muxer resources
     override fun close() {
         runCatching { encoder.stop() }
         runCatching { encoder.release() }
@@ -105,10 +98,12 @@ class PoseVideoEncoder(
         runCatching { muxer.release() }
     }
 
+    // Wait for a free input buffer
     private fun dequeueInputBufferBlocking(): Int {
         return encoder.dequeueInputBuffer(TIMEOUT_US)
     }
 
+    // Pull encoded output and write it to the muxer
     private fun drainEncoder(endOfStream: Boolean) {
         while (true) {
             val outputIndex = encoder.dequeueOutputBuffer(bufferInfo, TIMEOUT_US)
@@ -137,6 +132,7 @@ class PoseVideoEncoder(
         }
     }
 
+    // Pick a YUV420 color format the encoder supports
     private fun selectColorFormat(): Int {
         val capabilities = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC).let { codec ->
             try {
@@ -155,6 +151,7 @@ class PoseVideoEncoder(
         }
     }
 
+    // Convert an RGB bitmap to YUV420 bytes for the encoder
     private fun bitmapToYuv420(bitmap: Bitmap, colorFormat: Int): ByteArray {
         val w = bitmap.width
         val h = bitmap.height

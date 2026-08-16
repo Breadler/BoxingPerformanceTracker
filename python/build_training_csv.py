@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 
+# Column groupings and labels
 METADATA_COLUMNS = {
     "video_id",
     "frame_index",
@@ -36,6 +37,7 @@ SHOULDER_WRIST_PAIRS = (
 BODY_CENTER_LANDMARKS = ("left_shoulder", "right_shoulder", "left_hip", "right_hip")
 
 
+# Numeric pose columns that aren't metadata
 def get_pose_feature_columns(pose_frames: pd.DataFrame) -> list[str]:
     feature_columns = [
         column
@@ -47,10 +49,12 @@ def get_pose_feature_columns(pose_frames: pd.DataFrame) -> list[str]:
     return feature_columns
 
 
+# Whether x/y/z columns exist for a landmark
 def has_landmark_columns(frames: pd.DataFrame, landmark: str) -> bool:
     return all(f"{landmark}_{axis}" in frames.columns for axis in ("x", "y", "z"))
 
 
+# Time (or frame) delta between consecutive rows
 def frame_deltas(window: pd.DataFrame) -> pd.Series:
     if "timestamp_ms" in window.columns:
         deltas = window["timestamp_ms"].astype(float).diff() / 1000.0
@@ -59,6 +63,7 @@ def frame_deltas(window: pd.DataFrame) -> pd.Series:
     return deltas.replace(0, np.nan)
 
 
+# Add mean/std/max velocity features for wrists and elbows
 def add_velocity_features(row: dict[str, object], window: pd.DataFrame) -> None:
     deltas = frame_deltas(window)
     for landmark in VELOCITY_LANDMARKS:
@@ -81,6 +86,7 @@ def add_velocity_features(row: dict[str, object], window: pd.DataFrame) -> None:
             row[f"{landmark}_velocity_max"] = speeds.max()
 
 
+# Mean shoulder/hip position per frame
 def body_center(window: pd.DataFrame) -> pd.DataFrame | None:
     required_columns = [
         f"{landmark}_{axis}"
@@ -98,6 +104,7 @@ def body_center(window: pd.DataFrame) -> pd.DataFrame | None:
     return pd.DataFrame(centers, index=window.index)
 
 
+# Add arm position features relative to the body center
 def add_body_relative_arm_features(row: dict[str, object], window: pd.DataFrame) -> None:
     center = body_center(window)
     if center is None:
@@ -124,6 +131,7 @@ def add_body_relative_arm_features(row: dict[str, object], window: pd.DataFrame)
             row[f"{landmark}_body_relative_{axis}_change"] = values.iloc[-1] - values.iloc[0]
 
 
+# Add wrist position features relative to the shoulder
 def add_shoulder_relative_wrist_features(row: dict[str, object], window: pd.DataFrame) -> None:
     for shoulder, wrist in SHOULDER_WRIST_PAIRS:
         side = shoulder.removesuffix("_shoulder")
@@ -149,6 +157,7 @@ def add_shoulder_relative_wrist_features(row: dict[str, object], window: pd.Data
             row[f"{side}_wrist_shoulder_relative_{axis}_change"] = values.iloc[-1] - values.iloc[0]
 
 
+# Euclidean distance between two landmarks per frame
 def distance_between_landmarks(
     frames: pd.DataFrame,
     first_landmark: str,
@@ -163,6 +172,7 @@ def distance_between_landmarks(
     return np.sqrt(((second.to_numpy() - first.to_numpy()) ** 2).sum(axis=1))
 
 
+# Add shoulder-to-wrist reach/extension change features
 def add_extension_features(row: dict[str, object], window: pd.DataFrame) -> None:
     for shoulder, wrist in SHOULDER_WRIST_PAIRS:
         side = shoulder.removesuffix("_shoulder")
@@ -190,6 +200,7 @@ def add_extension_features(row: dict[str, object], window: pd.DataFrame) -> None
             )
 
 
+# Run all feature-engineering steps on a window
 def add_engineered_motion_features(row: dict[str, object], window: pd.DataFrame) -> None:
     add_velocity_features(row, window)
     add_body_relative_arm_features(row, window)
@@ -197,6 +208,7 @@ def add_engineered_motion_features(row: dict[str, object], window: pd.DataFrame)
     add_extension_features(row, window)
 
 
+# Validate required columns and window ordering
 def validate_inputs(pose_frames: pd.DataFrame, punch_windows: pd.DataFrame) -> None:
     required_pose_columns = {"video_id", "frame_index", "timestamp_ms"}
     missing_pose_columns = required_pose_columns - set(pose_frames.columns)
@@ -221,18 +233,21 @@ def validate_inputs(pose_frames: pd.DataFrame, punch_windows: pd.DataFrame) -> N
             raise ValueError(f"punch_windows.csv has end_ms before start_ms at rows: {bad_rows}")
 
 
+# Nearest pose frame's timestamp for a given frame index
 def frame_to_timestamp_ms(frames: pd.DataFrame, frame_index: int) -> int:
     frame_numbers = frames["frame_index"].astype(int)
     nearest_position = (frame_numbers - frame_index).abs().to_numpy().argmin()
     return int(round(float(frames.iloc[nearest_position]["timestamp_ms"])))
 
 
+# Nearest pose frame's index for a given timestamp
 def timestamp_to_frame(frames: pd.DataFrame, timestamp_ms: float) -> int:
     timestamps = frames["timestamp_ms"].astype(float)
     nearest_position = (timestamps - timestamp_ms).abs().to_numpy().argmin()
     return int(frames.iloc[nearest_position]["frame_index"])
 
 
+# Build one labeled training row from a time window of pose frames
 def aggregate_window(
     frames: pd.DataFrame,
     feature_columns: list[str],
@@ -282,6 +297,7 @@ def aggregate_window(
     return row
 
 
+# Fixed-size window centered on a timestamp, clamped to bounds
 def centered_time_window_bounds(
     *,
     center_ms: int,
@@ -308,6 +324,7 @@ def centered_time_window_bounds(
     return start_ms, end_ms
 
 
+# Fixed-size window ending at a timestamp, clamped to bounds
 def end_anchored_time_window_bounds(
     *,
     end_ms: int,
@@ -328,6 +345,7 @@ def end_anchored_time_window_bounds(
     return start_ms, clipped_end_ms
 
 
+# Boolean mask marking milliseconds covered by any labeled punch window
 def build_labeled_time_mask(
     windows: pd.DataFrame,
     *,
@@ -343,6 +361,7 @@ def build_labeled_time_mask(
     return mask
 
 
+# Ensure punch_windows has start_ms/end_ms, converting from frame labels if needed
 def labels_with_timestamps(pose_frames: pd.DataFrame, punch_windows: pd.DataFrame) -> pd.DataFrame:
     labels = punch_windows.copy()
     if {"start_ms", "end_ms"}.issubset(labels.columns):
@@ -370,6 +389,7 @@ def labels_with_timestamps(pose_frames: pd.DataFrame, punch_windows: pd.DataFram
     return labels.dropna(subset=["start_ms", "end_ms"])
 
 
+# Build one "punch" training row per labeled punch window
 def build_positive_rows(
     pose_frames: pd.DataFrame,
     punch_windows: pd.DataFrame,
@@ -434,6 +454,7 @@ def build_positive_rows(
     return rows
 
 
+# Sample "no_punch" training rows from unlabeled time windows
 def build_negative_rows(
     pose_frames: pd.DataFrame,
     punch_windows: pd.DataFrame,
@@ -493,6 +514,7 @@ def build_negative_rows(
             if row is not None:
                 candidate_rows.append(row)
 
+    # Down-sample if there are more candidates than max_rows
     if max_rows and len(candidate_rows) > max_rows:
         rng = np.random.default_rng(random_seed)
         selected = rng.choice(len(candidate_rows), size=max_rows, replace=False)
@@ -501,6 +523,7 @@ def build_negative_rows(
     return candidate_rows
 
 
+# Default window duration: median labeled punch length
 def infer_window_ms(punch_windows: pd.DataFrame) -> int:
     lengths = punch_windows["end_ms"] - punch_windows["start_ms"]
     if lengths.empty:
@@ -508,6 +531,7 @@ def infer_window_ms(punch_windows: pd.DataFrame) -> int:
     return max(1, int(round(float(lengths.median()))))
 
 
+# Build the full punch/no_punch window-level training CSV
 def build_training_csv(
     pose_frames_path: Path,
     punch_windows_path: Path,
@@ -531,6 +555,7 @@ def build_training_csv(
 
     feature_columns = get_pose_feature_columns(pose_frames)
     resolved_window_ms = window_ms or infer_window_ms(punch_windows)
+    # Positive (punch) rows
     positive_rows = build_positive_rows(
         pose_frames,
         punch_windows,
@@ -541,6 +566,7 @@ def build_training_csv(
         include_raw_landmark_features=include_raw_landmark_features,
     )
 
+    # Negative (no_punch) rows, sized relative to positives
     resolved_negative_stride_ms = negative_stride_ms or resolved_window_ms
     max_negative_rows = int(round(len(positive_rows) * negative_ratio))
     negative_rows = build_negative_rows(
@@ -558,6 +584,7 @@ def build_training_csv(
     if not training_rows:
         raise ValueError("No training rows were created. Check pose_frames.csv and punch_windows.csv.")
 
+    # Combine and write to CSV
     training = pd.DataFrame(training_rows)
     feature_output_columns = [
         column
@@ -582,6 +609,7 @@ def build_training_csv(
     return training
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build window-level punch/no_punch training rows from pose frames and punch labels.",

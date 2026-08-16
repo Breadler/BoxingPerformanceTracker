@@ -2,6 +2,7 @@ package com.breadler.boxingperformancetracker.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+// App brand and graph colors
 val StrykoRed = Color(0xFF800D08)
 val StrykoBlue = Color(0xFF41466F)
 val StrykoBackground = Color(0xFFF2EFED)

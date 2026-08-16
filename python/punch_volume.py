@@ -13,12 +13,14 @@ PUNCH_WINDOW_REQUIRED_COLUMNS = {"video_id", "start_ms", "end_ms"}
 POSE_FRAME_REQUIRED_COLUMNS = {"video_id", "timestamp_ms"}
 
 
+# Validate required columns are present
 def validate_punch_windows(punch_windows: pd.DataFrame) -> None:
     missing = PUNCH_WINDOW_REQUIRED_COLUMNS - set(punch_windows.columns)
     if missing:
         raise ValueError(f"punch_windows.csv is missing columns: {sorted(missing)}")
 
 
+# Validate required columns are present
 def validate_pose_frames(pose_frames: pd.DataFrame) -> None:
     missing = POSE_FRAME_REQUIRED_COLUMNS - set(pose_frames.columns)
     if missing:
@@ -26,12 +28,7 @@ def validate_pose_frames(pose_frames: pd.DataFrame) -> None:
 
 
 def build_punch_combos(punch_windows: pd.DataFrame, *, combo_gap_ms: int) -> pd.DataFrame:
-    """Groups individual predicted punches into combos when the gap between one
-    punch ending and the next starting is at most combo_gap_ms. Mirrors the
-    overlap-merge in predict_punches.merge_punch_windows, one level up. Keeps
-    each combo's individual punch end times (not just start/end/count), so
-    punch_count_at() can report a running count within the combo instead of a
-    flat total across its whole span."""
+    """Group punches into combos by gap between end/start times."""
     if combo_gap_ms < 0:
         raise ValueError("combo_gap_ms must be 0 or greater.")
 
@@ -88,11 +85,7 @@ def build_punch_combos(punch_windows: pd.DataFrame, *, combo_gap_ms: int) -> pd.
 
 
 def punch_count_at(combos_for_video: pd.DataFrame, timestamp_ms: int) -> int:
-    """Running count of punches within the covering combo that have landed
-    (ended) by timestamp_ms: 0 right as the combo starts, stepping up by one
-    at each individual punch's own end time, reaching the combo's full count
-    exactly at combo_end_ms - i.e. the combo number is marked at its end, with
-    the count for each punch building up to it. 0 outside of any combo."""
+    """Running punch count within the covering combo at timestamp_ms."""
     if combos_for_video.empty:
         return 0
     covering = combos_for_video[
@@ -113,15 +106,7 @@ def compute_punch_volume(
     stride_ms: int = DEFAULT_STRIDE_MS,
     combo_gap_ms: int = DEFAULT_COMBO_GAP_MS,
 ) -> pd.DataFrame:
-    """Punch volume on a uniform sliding-window grid: the exact combo count
-    covering each window's center_ms. Raw - deliberately never smoothed or
-    downsampled (it's a sparse, bursty signal; averaging it the way
-    guard_height/movement are dilutes short combos almost to nothing). See
-    graph_metrics.py for how this gets combined with the other two stages.
-
-    pose_frames is only used to derive the window grid (its landmark columns
-    aren't read) so this stage's timestamps line up exactly with
-    guard_height.compute_guard_height() / movement.compute_movement()."""
+    """Punch volume on a uniform sliding-window grid."""
     if window_ms < 1:
         raise ValueError("window_ms must be at least 1.")
     if stride_ms < 1:
@@ -166,14 +151,7 @@ def compute_punch_volume_keyframes(
     *,
     combo_gap_ms: int = DEFAULT_COMBO_GAP_MS,
 ) -> pd.DataFrame:
-    """Sparse points for display only: one point at each individual punch's own
-    end time, holding the running count within its combo (1, 2, 3...), plus a
-    0 right before each combo starts and right after it ends so the line
-    returns to baseline between bursts. Connecting these directly is a line
-    climbing to each punch, not a barchart-style hold - compute_punch_volume()
-    (the uniform grid used by graph_metrics.py's merge and the app) is a
-    separate, unaffected computation; this is purely an alternate view for
-    plot_graph_metrics.py."""
+    """Sparse per-punch keyframes for display, with 0 markers bounding each combo."""
     validate_pose_frames(pose_frames)
     validate_punch_windows(punch_windows)
 
@@ -199,8 +177,7 @@ def compute_punch_volume_keyframes(
             rows.append({"video_id": video_id, "timestamp_ms": combo.combo_start_ms, "punch_volume": 0})
             for punch_number, end_ms in enumerate(combo.punch_end_times_ms, start=1):
                 rows.append({"video_id": video_id, "timestamp_ms": end_ms, "punch_volume": punch_number})
-            # Drop straight back to 0 right after the combo ends - no gradual
-            # decay, the next instant just reads "nothing happening" again.
+            # Reset to 0 after combo ends
             rows.append({"video_id": video_id, "timestamp_ms": combo.combo_end_ms + 1, "punch_volume": 0})
 
         if max_ms > int(video_combos.iloc[-1]["combo_end_ms"]):
@@ -211,6 +188,7 @@ def compute_punch_volume_keyframes(
     return keyframes.sort_values(["video_id", "timestamp_ms"]).reset_index(drop=True)
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compute combo-based punch volume on a uniform sliding-window grid.",

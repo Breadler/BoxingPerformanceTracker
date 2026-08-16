@@ -7,20 +7,7 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 import kotlin.math.sqrt
 
-/**
- * Local port of python/graph_metrics.py + punch_volume.py: head-relative guard
- * height and hip x/z movement speed on a uniform sliding-window grid
- * ([computeGraphMetrics]), and punch volume as sparse per-punch keyframes
- * ([computePunchVolumeKeyframes]) rather than that same grid - it's a sparse,
- * bursty signal (tens of punches per round vs. thousands of grid samples), and
- * doesn't need pose data at all, only the already-merged punch windows and the
- * session duration. That makes it both the closest match to
- * punch_volume.compute_punch_volume_keyframes() and the cheapest option on
- * device: no per-window combo lookup over the whole video, no
- * smoothing/downsampling/curve-fitting - just a straight line through a
- * couple hundred points at most, computed on demand from data already held
- * in memory (no extra Room storage, no re-processing).
- */
+// Local port of graph_metrics.py + punch_volume.py
 internal object GraphMetrics {
     private const val TAG = "GraphMetrics"
     const val DEFAULT_COMBO_GAP_MS = 500L
@@ -28,6 +15,7 @@ internal object GraphMetrics {
     const val DEFAULT_MOVEMENT_SMOOTHING_MS = 1500L
     const val DEFAULT_DOWNSAMPLE_BUCKET_MS = 500L
 
+    // Guard height + movement on a uniform sliding-window grid
     fun computeGraphMetrics(
         observations: List<FrameObservation>,
         windowMs: Long,
@@ -57,11 +45,7 @@ internal object GraphMetrics {
         }
     }
 
-    /** Mean of (nose_y - min(left_wrist_y, right_wrist_y)) across the window. MediaPipe
-     * y is inverted (0 = top of frame), so this is positive when the higher-guarding
-     * wrist sits above the nose, shrinking toward zero/negative as the guard drops to
-     * chin/chest level or below. Uses whichever wrist is available/higher, since one
-     * hand may be extended to punch while the other still guards. */
+    // Guard height: nose-to-wrist vertical gap
     private fun guardHeightForWindow(window: List<FrameObservation>): Double {
         val values = window.mapNotNull { observation ->
             val noseY = observation.landmarks["nose"]?.y ?: return@mapNotNull null
@@ -78,9 +62,7 @@ internal object GraphMetrics {
         return if (values.isEmpty()) 0.0 else values.average()
     }
 
-    /** Mean frame-to-frame speed of the hip midpoint on x/z only (y excluded - vertical
-     * bob isn't footwork). Same shape as the existing wrist/elbow velocity features
-     * used for punch classification, applied to the hip center instead. */
+    // Movement: hip center speed (x/z only)
     private fun movementForWindow(window: List<FrameObservation>): Double {
         val speeds = window.zipWithNext().mapNotNull { (previous, current) ->
             val previousCenter = hipCenter(previous) ?: return@mapNotNull null
@@ -94,15 +76,14 @@ internal object GraphMetrics {
         return if (speeds.isEmpty()) 0.0 else speeds.average()
     }
 
+    // Mean hip x/z position for one frame
     private fun hipCenter(observation: FrameObservation): Pair<Float, Float>? {
         val leftHip = observation.landmarks["left_hip"] ?: return null
         val rightHip = observation.landmarks["right_hip"] ?: return null
         return ((leftHip.x + rightHip.x) / 2f) to ((leftHip.z + rightHip.z) / 2f)
     }
 
-    /** Centered rolling mean per column, independently windowed, mirroring
-     * smooth_graph_metrics(). [points] must already be sorted by timestampMs and
-     * evenly spaced - true for anything produced by [computeGraphMetrics]. */
+    // Smoothing: centered rolling mean
     fun smoothPerformancePoints(
         points: List<PerformancePoint>,
         strideMs: Long,
@@ -122,12 +103,12 @@ internal object GraphMetrics {
         }
     }
 
+    // Convert a smoothing duration to a sample count
     private fun sampleWindow(smoothingMs: Long, strideMs: Long): Int {
         return (smoothingMs.toDouble() / strideMs.toDouble()).roundToInt().coerceAtLeast(1)
     }
 
-    /** Same semantics as pandas' rolling(window, center=True, min_periods=1).mean() -
-     * the window shrinks near the edges instead of producing a missing value there. */
+    // Rolling average with shrinking edge window
     private fun smoothSeries(values: List<Double>, windowSamples: Int): List<Double> {
         if (windowSamples <= 1) return values
         val half = windowSamples / 2
@@ -138,10 +119,7 @@ internal object GraphMetrics {
         }
     }
 
-    /** Collapses [points] into bucketMs-wide buckets (mean per bucket), mirroring
-     * downsample_graph_metrics(). Meant to run after [smoothPerformancePoints]: smooth
-     * first for a stable trend, then downsample so each remaining point still reflects
-     * that trend rather than one raw sample. */
+    // Downsampling: mean per time bucket
     fun downsamplePerformancePoints(
         points: List<PerformancePoint>,
         bucketMs: Long = DEFAULT_DOWNSAMPLE_BUCKET_MS,
@@ -160,17 +138,13 @@ internal object GraphMetrics {
             }
     }
 
+    // One punch-volume graph sample point
     data class PunchVolumeKeyframe(val timestampMs: Long, val punchVolume: Int)
 
+    // One combo of merged consecutive punches
     private data class PunchCombo(val startMs: Long, val endMs: Long, val punchEndTimesMs: List<Long>)
 
-    /** Sparse points for the punch volume graph: one point at each individual punch's
-     * own end time, holding the running count within its combo (1, 2, 3...), plus a 0
-     * right before each combo starts and right after it ends. Connecting these
-     * directly with straight lines gives a diagonal ramp up through each punch and
-     * back down - never a flat hold for a punch's duration, and no smoothing/curve
-     * fitting on top. Mirrors punch_volume.compute_punch_volume_keyframes(), using
-     * [durationMs] in place of Python's pose-frame timestamp bounds. */
+    // Punch volume keyframes for the graph
     fun computePunchVolumeKeyframes(
         punchWindows: List<PunchWindow>,
         durationMs: Long,
@@ -203,9 +177,7 @@ internal object GraphMetrics {
         return byTimestamp.entries.sortedBy { it.key }.map { PunchVolumeKeyframe(it.key, it.value) }
     }
 
-    /** Groups individual predicted punches into combos when the gap between one punch
-     * ending and the next starting is at most comboGapMs. Mirrors the overlap-merge
-     * that produces [punchWindows] in the first place, one level up. */
+    // Group punches into combos by gap
     private fun buildPunchCombos(punchWindows: List<PunchWindow>, comboGapMs: Long): List<PunchCombo> {
         if (punchWindows.isEmpty()) return emptyList()
         val sorted = punchWindows.sortedBy { it.startMs }

@@ -17,22 +17,7 @@ import kotlin.math.ceil
 
 class PoseFrameExtractor(private val context: Context) {
 
-    /**
-     * Runs MediaPipe pose detection across every [frameStride]-th frame of the video,
-     * in native decode order - mirroring pose_extractor.py / session_processing's
-     * extract_frame_observations() (both: sequential cv2.VideoCapture.read(), no
-     * seeking, timestamp_ms = frame_index * 1000 / fps). That's the exact extraction
-     * this app's on-device model was trained against; sampling on a synthetic
-     * fixed-ms grid instead (the previous getFrameAtTime-based approach) fed the
-     * classifier features built from different real timestamps/frame counts than
-     * training saw, independent of anything about the model itself.
-     *
-     * When [annotatedOutputFile] is provided, this also renders a skeleton-only
-     * overlay (no punch predictions) for each processed frame and muxes it into a
-     * local mp4, mirroring the extractor's annotated review video. If annotated
-     * video generation fails for any reason, pose extraction still completes and
-     * the partially written file (if any) is discarded.
-     */
+    // Pose extraction entry point
     fun extract(
         videoUri: Uri,
         frameStride: Int = 1,
@@ -55,8 +40,7 @@ class PoseFrameExtractor(private val context: Context) {
                 return emptyList()
             }
 
-            // Same fallback as pose_extractor.py's `if fps <= 0: fps = 30.0` for
-            // containers that don't report a frame count.
+            // Frame count / fps fallback
             val reportedFrameCount = retriever
                 .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)
                 ?.toIntOrNull()
@@ -90,9 +74,7 @@ class PoseFrameExtractor(private val context: Context) {
                     for (frameIndex in 0 until totalFrames step frameStride.coerceAtLeast(1)) {
                         val timestampMs = (frameIndex * 1000.0 / fps).toLong()
                         val rawBitmap = retriever.getFrameAtIndex(frameIndex)
-                        // MediaPipe's BitmapImageBuilder requires ARGB_8888. getFrameAtIndex can
-                        // return other configs (RGB_565, HARDWARE, RGBA_F16) depending on the
-                        // device/codec, so normalize before doing anything else with the frame.
+                        // Normalize bitmap config to ARGB_8888
                         val bitmap = rawBitmap?.let {
                             if (it.config != Bitmap.Config.ARGB_8888) {
                                 it.copy(Bitmap.Config.ARGB_8888, false).also { converted -> it.recycle() }
@@ -156,6 +138,7 @@ class PoseFrameExtractor(private val context: Context) {
         }
     }
 
+    // Run pose detection on one frame
     private fun detectFrame(
         landmarker: PoseLandmarker,
         bitmap: Bitmap,
@@ -190,6 +173,7 @@ class PoseFrameExtractor(private val context: Context) {
         )
     }
 
+    // Draw skeleton points and connecting lines on a frame
     private fun drawSkeleton(
         canvas: Canvas,
         landmarks: Map<String, LandmarkPoint>,
@@ -218,6 +202,7 @@ class PoseFrameExtractor(private val context: Context) {
         }
     }
 
+    // Draw the frame number in the corner
     private fun drawFrameLabel(canvas: Canvas, frameIndex: Int) {
         val textPaint = Paint().apply {
             color = Color.WHITE
@@ -231,14 +216,15 @@ class PoseFrameExtractor(private val context: Context) {
     private companion object {
         const val TAG = "PoseFrameExtractor"
 
-        /** Matches pose_extractor.py's `if fps <= 0: fps = 30.0` fallback. */
         const val DEFAULT_FPS = 30.0
 
+        // Landmark indices used for punch classification
         val boxingLandmarkIndices = listOf(
             0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
             11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
         )
 
+        // MediaPipe landmark name order
         val poseLandmarkNames = listOf(
             "nose",
             "left_eye_inner",
@@ -275,9 +261,7 @@ class PoseFrameExtractor(private val context: Context) {
             "right_foot_index",
         )
 
-        // POSE_CONNECTIONS from pose_extractor.py, restricted to the boxing landmark
-        // subset (drops fingertip connections for indices 17-22, which are excluded
-        // from BOXING_LANDMARK_INDICES).
+        // Skeleton line connections for overlay drawing
         val poseConnections = listOf(
             "nose" to "left_eye_inner",
             "left_eye_inner" to "left_eye",
