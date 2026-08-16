@@ -7,6 +7,7 @@ import androidx.core.view.WindowCompat
 import com.breadler.boxingperformancetracker.navigation.AppNavigation
 import com.breadler.boxingperformancetracker.ui.theme.BoxingPerformanceTrackerTheme
 
+// App entry point, hosts the Compose navigation graph
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)

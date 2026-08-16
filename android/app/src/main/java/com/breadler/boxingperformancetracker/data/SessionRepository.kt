@@ -29,12 +29,12 @@ class SessionRepository(context: Context) {
         entities.map { it.toDomain() }
     }
 
+    // Single session lookup
     suspend fun getSession(sessionId: String): SessionSummary? {
         return dao.getSession(sessionId)?.toDomain()
     }
 
-    /** Deletes the session row and the local video/thumbnail files it owns (all live
-     * under this app's private storage, so nothing else references them). */
+    // Delete session row and its local files
     suspend fun deleteSession(sessionId: String): Unit = withContext(Dispatchers.IO) {
         val entity = dao.getSession(sessionId) ?: return@withContext
         dao.delete(sessionId)
@@ -43,6 +43,7 @@ class SessionRepository(context: Context) {
         deleteLocalFile(entity.thumbnailUri)
     }
 
+    // Delete one file on disk, ignoring missing/invalid paths
     private fun deleteLocalFile(uriString: String) {
         if (uriString.isBlank()) return
         runCatching {
@@ -53,6 +54,7 @@ class SessionRepository(context: Context) {
         }
     }
 
+    // Copy, process, and save one imported video as a new session
     suspend fun importVideo(
         videoUri: Uri,
         sessionName: String,
@@ -113,16 +115,14 @@ class SessionRepository(context: Context) {
         }
     }
 
+    // Path for a session's annotated video file
     private fun annotatedVideoFile(sessionId: String): File {
         val annotatedDir = File(appContext.filesDir, "session_videos/annotated")
         annotatedDir.mkdirs()
         return File(annotatedDir, "$sessionId.mp4")
     }
 
-    /** Grabs one frame partway into [videoFile] (not frame 0, which is often blank
-     * before the boxer steps into the shot) and saves it as a scaled-down JPEG for
-     * the session list. Prefers the annotated (skeleton-overlay) video over the raw
-     * source when both exist, since it's the more distinctive/recognizable preview. */
+    // Generate scaled-down JPEG thumbnail from video
     private fun generateThumbnail(sessionId: String, videoFile: File): String? {
         if (!videoFile.exists()) return null
         val retriever = MediaMetadataRetriever()
@@ -154,6 +154,7 @@ class SessionRepository(context: Context) {
         }
     }
 
+    // Copy a content Uri into this app's private storage
     private fun copyUriToSessionStorage(videoUri: Uri, sourceName: String): File {
         val sessionVideoDir = File(appContext.filesDir, "session_videos")
         sessionVideoDir.mkdirs()
@@ -170,6 +171,7 @@ class SessionRepository(context: Context) {
         return targetFile
     }
 
+    // Read a video's duration via MediaMetadataRetriever
     private fun readVideoDurationMs(videoUri: Uri): Long {
         val retriever = MediaMetadataRetriever()
         return try {
@@ -180,6 +182,7 @@ class SessionRepository(context: Context) {
         }
     }
 
+    // Look up a content Uri's display name
     private fun queryDisplayName(uri: Uri): String? {
         return appContext.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
@@ -191,6 +194,7 @@ class SessionRepository(context: Context) {
         }
     }
 
+    // Room entity -> domain model
     private fun SessionEntity.toDomain(): SessionSummary {
         return SessionSummary(
             id = id,
@@ -209,6 +213,7 @@ class SessionRepository(context: Context) {
         )
     }
 
+    // Domain model -> Room entity
     private fun SessionSummary.toEntity(): SessionEntity {
         return SessionEntity(
             id = id,
@@ -228,10 +233,12 @@ class SessionRepository(context: Context) {
         )
     }
 
+    // Gson type tokens for JSON list columns
     private fun punchWindowListType() = object : TypeToken<List<PunchWindow>>() {}.type
     private fun punchPredictionListType() = object : TypeToken<List<PunchPrediction>>() {}.type
     private fun performancePointListType() = object : TypeToken<List<PerformancePoint>>() {}.type
 
+    // Format milliseconds as m:ss
     private fun formatDurationLabel(durationMs: Long): String {
         val totalSeconds = durationMs / 1000
         val minutes = totalSeconds / 60

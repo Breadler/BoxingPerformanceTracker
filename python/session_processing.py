@@ -22,6 +22,7 @@ from pose_extractor import (
 )
 
 
+# Skeleton line connections for the annotated overlay
 BOXING_CONNECTIONS = (
     (11, 12),
     (11, 13),
@@ -38,6 +39,7 @@ BOXING_CONNECTIONS = (
 )
 
 
+# One graph metrics sample point
 @dataclass(slots=True)
 class PerformancePoint:
     timestamp_ms: int
@@ -46,6 +48,7 @@ class PerformancePoint:
     movement: float
 
 
+# One merged punch event
 @dataclass(slots=True)
 class PunchWindowResult:
     start_ms: int
@@ -54,6 +57,7 @@ class PunchWindowResult:
     punch_probability: float
 
 
+# Full result of processing one session's video
 @dataclass(slots=True)
 class ProcessingResult:
     session_id: str
@@ -70,6 +74,7 @@ class ProcessingResult:
     prediction_windows_path: str
     pose_frames_path: str
 
+    # Serialize this result into the API JSON response shape
     def to_response(self, *, base_url: str, storage_root: Path) -> dict[str, object]:
         source_relative = Path(self.source_video_path).resolve().relative_to(storage_root.resolve())
         annotated_relative = Path(self.annotated_video_path).resolve().relative_to(storage_root.resolve())
@@ -88,6 +93,7 @@ class ProcessingResult:
         }
 
 
+# One frame's pose detection result
 @dataclass(slots=True)
 class FrameObservation:
     frame_index: int
@@ -96,6 +102,7 @@ class FrameObservation:
     landmark_values: dict[str, float]
     keypoints: dict[str, tuple[float, float, float, float]]
 
+    # Flatten to a CSV row
     def to_row(self) -> dict[str, object]:
         row: dict[str, object] = {
             "frame_index": self.frame_index,
@@ -106,6 +113,7 @@ class FrameObservation:
         return row
 
 
+# Build feature columns and raw keypoints for one frame's landmarks
 def _landmark_feature_map(landmarks: list[object], landmark_indices: tuple[int, ...]) -> tuple[dict[str, float], dict[str, tuple[float, float, float, float]]]:
     feature_values: dict[str, float] = {}
     keypoints: dict[str, tuple[float, float, float, float]] = {}
@@ -128,6 +136,7 @@ def _landmark_feature_map(landmarks: list[object], landmark_indices: tuple[int, 
     return feature_values, keypoints
 
 
+# Format milliseconds as m:ss
 def _format_duration_label(duration_ms: int) -> str:
     total_seconds = max(0, duration_ms // 1000)
     minutes = total_seconds // 60
@@ -135,6 +144,7 @@ def _format_duration_label(duration_ms: int) -> str:
     return f"{minutes}:{seconds:02d}"
 
 
+# Format a timestamp as m:ss
 def _timestamp_label(timestamp_ms: int) -> str:
     total_seconds = max(0, timestamp_ms // 1000)
     minutes = total_seconds // 60
@@ -142,6 +152,7 @@ def _timestamp_label(timestamp_ms: int) -> str:
     return f"{minutes}:{seconds:02d}"
 
 
+# Run MediaPipe pose detection frame-by-frame over a video
 def extract_frame_observations(
     video_path: Path,
     *,
@@ -166,6 +177,7 @@ def extract_frame_observations(
     width = int(capture.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
     height = int(capture.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
 
+    # Load MediaPipe pose landmarker
     import importlib
 
     mp = importlib.import_module("mediapipe")
@@ -181,6 +193,7 @@ def extract_frame_observations(
         num_poses=1,
     )
 
+    # Walk every frame, running pose detection on the sampled ones
     observations: list[FrameObservation] = []
     frame_index = 0
 
@@ -233,6 +246,7 @@ def extract_frame_observations(
     return observations, fps, (width, height)
 
 
+# Merge overlapping punch-classified windows into punch events
 def merge_prediction_windows(prediction_windows: pd.DataFrame) -> pd.DataFrame:
     punch_rows = prediction_windows[prediction_windows["prediction"] == "punch"].copy()
     if punch_rows.empty:
@@ -288,6 +302,7 @@ def merge_prediction_windows(prediction_windows: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(merged_rows)
 
 
+# Draw skeleton points and connecting lines on a frame
 def _draw_landmarks(frame: np.ndarray, keypoints: dict[str, tuple[float, float, float, float]]) -> None:
     height, width = frame.shape[:2]
 
@@ -314,6 +329,7 @@ def _draw_landmarks(frame: np.ndarray, keypoints: dict[str, tuple[float, float, 
         cv2.circle(frame, center, 6, (40, 219, 255), 2)
 
 
+# Draw the punch-detected / timestamp banner on a frame
 def _draw_overlay(frame: np.ndarray, *, timestamp_ms: int, punch_windows: list[PunchWindowResult]) -> None:
     active_window = next((window for window in punch_windows if window.start_ms <= timestamp_ms <= window.end_ms), None)
     overlay = frame.copy()
@@ -355,6 +371,7 @@ def _draw_overlay(frame: np.ndarray, *, timestamp_ms: int, punch_windows: list[P
         )
 
 
+# Re-render the source video with skeleton + punch overlays
 def write_annotated_video(
     video_path: Path,
     observations: list[FrameObservation],
@@ -411,6 +428,7 @@ def write_annotated_video(
     writer.release()
 
 
+# Full pipeline: pose extraction, punch prediction, graph metrics, annotated video
 def process_video(
     video_path: Path,
     output_dir: Path,
@@ -431,6 +449,7 @@ def process_video(
     session_dir = output_dir / session_id
     session_dir.mkdir(parents=True, exist_ok=True)
 
+    # Pose extraction
     observations, fps, _dimensions = extract_frame_observations(
         video_path,
         model_path=model_path,
@@ -447,6 +466,7 @@ def process_video(
     pose_frames_path.parent.mkdir(parents=True, exist_ok=True)
     pose_frames.to_csv(pose_frames_path, index=False)
 
+    # Punch prediction
     prediction_windows_path = session_dir / "prediction_windows.csv"
     merged_windows_path = session_dir / "predicted_punch_windows.csv"
     model_path = model_path or DEFAULT_MODEL_PATH
@@ -474,6 +494,7 @@ def process_video(
         for row in punch_windows_df.itertuples(index=False)
     ]
 
+    # Graph metrics
     graph_metrics = compute_graph_metrics(
         pose_frames,
         punch_windows_df.assign(video_id=session_id),
@@ -490,12 +511,14 @@ def process_video(
         )
         for row in graph_metrics.itertuples(index=False)
     ]
+    # Annotated review video
     annotated_path = session_dir / f"{video_path.stem}_annotated.mp4"
     if write_annotated:
         write_annotated_video(video_path, observations, punch_windows, annotated_path, fps)
     else:
         annotated_path = video_path
 
+    # Copy source video into the session dir and build the result
     duration_ms = int(observations[-1].timestamp_ms + max(1, round(1000 / fps)))
     source_copy_path = session_dir / video_path.name
     if not source_copy_path.exists():

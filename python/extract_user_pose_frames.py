@@ -6,10 +6,12 @@ from pathlib import Path
 from session_processing import process_video
 
 
+# Default output CSV path derived from the video filename
 def default_output_path(video_path: Path) -> Path:
     return Path("data") / f"{video_path.stem}_pose_frames.csv"
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Extract frame-level pose rows from one user boxing video for punch prediction.",
@@ -51,6 +53,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    # Run pose extraction and punch prediction for the video
     output_path = args.output or default_output_path(args.video)
     process_video(
         args.video,

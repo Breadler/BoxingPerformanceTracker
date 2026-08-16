@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
+// Sets status/navigation bar colors and icon contrast for the current screen
 @Composable
 fun StrykoSystemBars(
     statusBarColor: Color,
@@ -27,6 +28,7 @@ fun StrykoSystemBars(
     }
 }
 
+// Compose Color -> platform ARGB int
 private fun Color.toArgb(): Int = android.graphics.Color.argb(
     255,
     (red * 255).toInt(),

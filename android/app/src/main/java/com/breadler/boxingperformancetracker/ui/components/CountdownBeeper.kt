@@ -10,29 +10,20 @@ import com.breadler.boxingperformancetracker.R
 
 private const val TICK_DURATION_MS = 150
 
-/**
- * Countdown/cue sounds for a recording session: [tick] is a short synthesized beep for
- * the last-3-seconds countdown warning, [playStart]/[playEnd] each play their bell audio
- * file once for "recording started"/"recording finished".
- *
- * This is a process-lifetime singleton, not tied to any screen's composition. [playEnd] in
- * particular fires right before New Session navigates away to the processing screen - if the
- * MediaPlayer were only reachable through that screen's remembered state, it became eligible
- * for garbage collection the instant the screen was disposed, which was cutting the sound off
- * mid-playback (a native MediaPlayer keeps playing regardless of Java-level reachability, but
- * only until GC actually collects it).
- */
+// Countdown/cue sounds singleton
 object CountdownBeeper {
     private var appContext: Context? = null
     private val toneGenerator by lazy { ToneGenerator(AudioManager.STREAM_MUSIC, ToneGenerator.MAX_VOLUME) }
     private val activePlayers = mutableSetOf<MediaPlayer>()
 
+    // Capture the application context once
     private fun bind(context: Context) {
         if (appContext == null) {
             appContext = context.applicationContext
         }
     }
 
+    // Short countdown beep
     fun tick() {
         toneGenerator.startTone(ToneGenerator.TONE_PROP_BEEP, TICK_DURATION_MS)
     }
@@ -41,6 +32,7 @@ object CountdownBeeper {
 
     fun playEnd() = playRaw(R.raw.audio_bell_end)
 
+    // Play a raw audio resource once
     private fun playRaw(resId: Int) {
         val context = appContext ?: return
         val player = MediaPlayer.create(context, resId) ?: return

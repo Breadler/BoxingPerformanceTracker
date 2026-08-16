@@ -5,11 +5,7 @@ Captures/
 
 # Local configuration
 local.properties
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/shelf/
-.idea/dictionaries/
-.idea/libraries/
+.idea/
 *.iml
 
 # Keystores and Secrets
@@ -37,5 +33,13 @@ python/data/*.png
 .DS_Store
 Thumbs.db
 
+# Office temp/lock files (e.g. ~$thesis_defense_slides.pptx)
+~$*
+
 # Private, local-only notes (not for the thesis or version control)
 PRIVATE-*.md
+
+# Thesis, slides, and other academic/report artifacts (not part of the app)
+thesis/
+*.pptx
+*.potx

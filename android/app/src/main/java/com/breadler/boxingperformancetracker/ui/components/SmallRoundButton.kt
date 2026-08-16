@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 
+// Small pill button with an icon on either side of the label
 @Composable
 fun SmallRoundButton(
     text: String,

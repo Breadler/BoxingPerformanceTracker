@@ -1,31 +1,14 @@
 package com.breadler.boxingperformancetracker.data.processing
 
-/**
- * On-device punch classifier backed by [PunchForestModel] - the 300-tree
- * RandomForestClassifier from python/models/random_forest.joblib, ported to plain
- * Java via m2cgen (see python/export_random_forest_java.py) rather than a
- * separately-trained TFLite network.
- *
- * The previous approach trained a small dense NN from scratch on the same
- * training.csv for on-device use, kept independent of the RandomForest used for
- * all Python-side testing. With a video-grouped train/validation split (instead
- * of the original per-row shuffle, which let near-duplicate overlapping windows
- * from the same clip leak across both sides), that NN's held-out accuracy came in
- * at ~50% - essentially chance - on only 350 labeled rows across 111 videos. The
- * RandomForest is the model that's actually been validated throughout this
- * project's Python testing, so porting it directly (rather than training a second,
- * independent model on the same thin data) is both more accurate and removes an
- * entire class of train/inference divergence between the app and Python.
- */
+// On-device punch classifier backed by PunchForestModel
 internal object RandomForestPunchClassifier {
+    // Config constants
     const val windowMs: Long = 250
     const val strideMs: Long = 40
     const val threshold: Float = 0.5f
     private const val PUNCH_CLASS_INDEX = 1
 
-    // Must match python/models/random_forest.joblib's feature_columns order exactly -
-    // PunchForestModel.score() reads its input as a plain positional double[], with
-    // no column-name metadata of its own to validate against.
+    // Feature order (must match random_forest.joblib)
     private val featureColumns = listOf(
         "left_wrist_velocity_mean",
         "left_wrist_velocity_std",
@@ -99,6 +82,7 @@ internal object RandomForestPunchClassifier {
         "right_wrist_forward_extension_change",
     )
 
+    // Classification entry point
     fun classify(features: Map<String, Float>): Float {
         val input = DoubleArray(featureColumns.size) { index ->
             (features[featureColumns[index]] ?: 0f).toDouble()

@@ -71,8 +71,10 @@ import kotlinx.coroutines.launch
 import java.io.File
 import java.util.UUID
 
+// Recording lifecycle: waiting, countdown, actively recording
 private enum class RecordingPhase { IDLE, PREPARING, RECORDING }
 
+// Camera preview + prepare/work countdown recording flow, or video import
 @Composable
 fun NewSessionScreen(
     onImportVideo: (Uri) -> Unit,
@@ -110,16 +112,19 @@ fun NewSessionScreen(
         contract = ActivityResultContracts.RequestPermission(),
     ) { granted -> hasCameraPermission = granted }
 
+    // Request camera permission on first entry
     LaunchedEffect(Unit) {
         if (!hasCameraPermission) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
+    // Stop recording if this screen is left mid-session
     DisposableEffect(Unit) {
         onDispose { recordingJob?.cancel() }
     }
 
+    // Cancel prepare/recording and reset to idle
     fun cancelActiveRecording() {
         recordingJob?.cancel()
         recordingJob = null
@@ -127,6 +132,7 @@ fun NewSessionScreen(
         phase = RecordingPhase.IDLE
     }
 
+    // Run the prepare countdown, then record for the work duration
     fun startRecordingSession() {
         recordingJob = scope.launch {
             phase = RecordingPhase.PREPARING
@@ -256,8 +262,7 @@ fun NewSessionScreen(
                         .offset(y = 43.dp),
                 )
 
-                // Switching cameras mid-recording isn't supported cleanly by CameraX's
-                // VideoCapture, so this is only offered before a session starts.
+                // Camera switch button (idle only)
                 if (hasCameraPermission && phase == RecordingPhase.IDLE) {
                     IconButton(
                         onClick = {
@@ -320,6 +325,7 @@ fun NewSessionScreen(
     }
 }
 
+// Format seconds as mm:ss
 private fun formatDuration(totalSeconds: Int): String {
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60

@@ -20,6 +20,7 @@ import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoSystemBars
 
+// Landing screen: logo + start/view-sessions actions
 @Composable
 fun HomeScreen(
     onStartNewSession: () -> Unit,

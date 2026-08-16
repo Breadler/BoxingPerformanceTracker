@@ -29,6 +29,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 
+// ExoPlayer-backed video view synced to external playback state
 @OptIn(UnstableApi::class)
 @Composable
 fun SessionVideoPlayer(
@@ -53,6 +54,7 @@ fun SessionVideoPlayer(
         }
     }
 
+    // Load the media item when the video changes
     LaunchedEffect(videoUri) {
         if (videoUri == null) {
             exoPlayer.stop()
@@ -75,6 +77,7 @@ fun SessionVideoPlayer(
         exoPlayer.prepare()
     }
 
+    // Mirror the external play/pause state
     LaunchedEffect(isPlaying, videoUri) {
         if (videoUri == null) {
             return@LaunchedEffect
@@ -82,6 +85,7 @@ fun SessionVideoPlayer(
         exoPlayer.playWhenReady = isPlaying
     }
 
+    // Seek when the caller requests a new position
     LaunchedEffect(seekToMs) {
         if (videoUri == null || seekToMs == null) {
             return@LaunchedEffect
@@ -89,6 +93,7 @@ fun SessionVideoPlayer(
         exoPlayer.seekTo(seekToMs)
     }
 
+    // Report duration and playback errors back to the caller
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlayingNow: Boolean) {
@@ -113,6 +118,7 @@ fun SessionVideoPlayer(
         }
     }
 
+    // Poll playback position while playing
     LaunchedEffect(exoPlayer, isPlaying, videoUri) {
         if (videoUri == null || !isPlaying) {
             return@LaunchedEffect

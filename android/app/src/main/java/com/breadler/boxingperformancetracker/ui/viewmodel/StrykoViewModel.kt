@@ -20,6 +20,7 @@ import java.util.ArrayDeque
 import java.util.Date
 import java.util.Locale
 
+// Shared app state: sessions list, import pipeline, and recording settings
 class StrykoViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = SessionRepository(application.applicationContext)
 
@@ -32,15 +33,13 @@ class StrykoViewModel(application: Application) : AndroidViewModel(application) 
     private val _importState = MutableStateFlow(SessionProcessingState())
     val importState: StateFlow<SessionProcessingState> = _importState.asStateFlow()
 
-    /** Videos recorded/imported while another one is still processing wait here, since only
-     * one on-device analysis pipeline runs at a time. See [acknowledgeCompletion]. */
+    // Queue for videos awaiting processing
     private val pendingVideos = ArrayDeque<QueuedVideo>()
 
     private val _queuedSessionNames = MutableStateFlow<List<String>>(emptyList())
     val queuedSessionNames: StateFlow<List<String>> = _queuedSessionNames.asStateFlow()
 
-    /** Recording setup carried across screens/navigation so it doesn't reset every time the
-     * New Session screen is (re)entered. */
+    // Recording setup, persisted across navigation
     private val _prepareSeconds = MutableStateFlow(30)
     val prepareSeconds: StateFlow<Int> = _prepareSeconds.asStateFlow()
 
@@ -62,6 +61,7 @@ class StrykoViewModel(application: Application) : AndroidViewModel(application) 
         _useFrontCamera.value = useFrontCamera
     }
 
+    // Start processing immediately, or queue behind an active import
     fun importVideo(videoUri: Uri) {
         val sessionName = SimpleDateFormat("h:mm a", Locale.getDefault()).format(Date())
         if (_importState.value.isProcessing) {
@@ -72,6 +72,7 @@ class StrykoViewModel(application: Application) : AndroidViewModel(application) 
         beginImport(videoUri, sessionName)
     }
 
+    // Run the repository's import pipeline and publish progress
     private fun beginImport(videoUri: Uri, sessionName: String) {
         _importState.value = SessionProcessingState(
             isProcessing = true,
@@ -110,8 +111,7 @@ class StrykoViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    /** Dismisses the finished/errored state shown on the status bar and, if a video was queued
-     * behind it, starts that one. */
+    // Dismiss status bar, start next queued video
     fun acknowledgeCompletion() {
         _importState.value = SessionProcessingState()
         val next = pendingVideos.poll()
@@ -119,9 +119,11 @@ class StrykoViewModel(application: Application) : AndroidViewModel(application) 
         next?.let { beginImport(it.uri, it.sessionName) }
     }
 
+    // One video waiting behind an active import
     private data class QueuedVideo(val uri: Uri, val sessionName: String)
 
     companion object {
+        // Standard ViewModelProvider.Factory boilerplate
         fun factory(application: Application): ViewModelProvider.Factory {
             return object : ViewModelProvider.Factory {
                 @Suppress("UNCHECKED_CAST")

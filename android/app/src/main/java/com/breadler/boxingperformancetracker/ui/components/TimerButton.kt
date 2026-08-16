@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import com.breadler.boxingperformancetracker.ui.theme.StrykoBlue
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 
+// Small circular icon button used for the +/- timer steppers
 @Composable
 fun TimerButton(
     iconResId: Int,

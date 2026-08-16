@@ -1,5 +1,6 @@
 package com.breadler.boxingperformancetracker.data.processing
 
+// Builds classifier feature rows from a window of pose observations
 internal object WindowFeatures {
     private val velocityLandmarks = listOf("left_wrist", "right_wrist", "left_elbow", "right_elbow")
     private val armLandmarks = listOf("left_wrist", "right_wrist", "left_elbow", "right_elbow")
@@ -9,6 +10,7 @@ internal object WindowFeatures {
     )
     private val bodyCenterLandmarks = listOf("left_shoulder", "right_shoulder", "left_hip", "right_hip")
 
+    // Build all features for one time window
     fun aggregate(
         observations: List<FrameObservation>,
         startMs: Long,
@@ -25,6 +27,7 @@ internal object WindowFeatures {
         return features
     }
 
+    // Mean/std/max velocity per landmark
     private fun addVelocityFeatures(features: MutableMap<String, Float>, window: List<FrameObservation>) {
         velocityLandmarks.forEach { landmark ->
             val speeds = window.zipWithNext().mapNotNull { (previous, current) ->
@@ -40,6 +43,7 @@ internal object WindowFeatures {
         }
     }
 
+    // Arm position features relative to body center
     private fun addBodyRelativeArmFeatures(features: MutableMap<String, Float>, window: List<FrameObservation>) {
         armLandmarks.forEach { landmark ->
             val relativePoints = window.mapNotNull { observation ->
@@ -56,6 +60,7 @@ internal object WindowFeatures {
         }
     }
 
+    // Wrist position features relative to the shoulder
     private fun addShoulderRelativeWristFeatures(features: MutableMap<String, Float>, window: List<FrameObservation>) {
         shoulderWristPairs.forEach { (shoulder, wrist) ->
             val side = shoulder.removeSuffix("_shoulder")
@@ -73,6 +78,7 @@ internal object WindowFeatures {
         }
     }
 
+    // Shoulder-to-wrist reach/extension change features
     private fun addExtensionFeatures(features: MutableMap<String, Float>, window: List<FrameObservation>) {
         shoulderWristPairs.forEach { (shoulder, wrist) ->
             val side = shoulder.removeSuffix("_shoulder")
@@ -96,6 +102,7 @@ internal object WindowFeatures {
         }
     }
 
+    // Mean/std/change per x/y/z axis
     private fun addAxisStats(features: MutableMap<String, Float>, prefix: String, points: List<LandmarkPoint>) {
         val axes = mapOf(
             "x" to points.map { it.x },
@@ -109,6 +116,7 @@ internal object WindowFeatures {
         }
     }
 
+    // Mean shoulder/hip position for one frame
     private fun bodyCenter(observation: FrameObservation): LandmarkPoint? {
         val points = bodyCenterLandmarks.mapNotNull { observation.landmarks[it] }
         if (points.isEmpty()) return null
@@ -120,6 +128,7 @@ internal object WindowFeatures {
         )
     }
 
+    // Euclidean distance between two landmarks
     private fun distance(first: LandmarkPoint, second: LandmarkPoint): Float {
         val dx = second.x - first.x
         val dy = second.y - first.y
@@ -127,6 +136,7 @@ internal object WindowFeatures {
         return kotlin.math.sqrt(dx * dx + dy * dy + dz * dz)
     }
 
+    // Small stats helpers that default to 0 on empty input
     private fun List<Float>.meanOrZero(): Float = if (isEmpty()) 0f else sum() / size
 
     private fun List<Float>.stdOrZero(): Float {

@@ -1,15 +1,4 @@
-"""Video-grouped evaluation of the RandomForest punch classifier.
-
-Standalone evaluation only — never writes to models/random_forest.joblib
-(the artifact exported to Android via export_random_forest_java.py). Trains
-throwaway models in memory purely to score them, so it cannot affect the
-shipped app.
-
-Grouped by video_id (not a per-row shuffle) so that overlapping windows from
-the same clip can't leak across train/test and inflate the score — see
-notes/decisions.md's 2026-08-07 entry, which this script exists to properly
-substantiate with a real run instead of a described-but-uncommitted method.
-"""
+"""Video-grouped evaluation of the RandomForest punch classifier."""
 
 from __future__ import annotations
 
@@ -35,6 +24,7 @@ N_ESTIMATORS = 300
 LABELS = ["punch", "no_punch"]
 
 
+# Fresh, untrained model with the same hyperparameters as production
 def _new_model() -> RandomForestClassifier:
     return RandomForestClassifier(
         n_estimators=N_ESTIMATORS,
@@ -43,6 +33,7 @@ def _new_model() -> RandomForestClassifier:
     )
 
 
+# Compute accuracy, F1, and confusion matrix for one prediction set
 def _score(y_true, y_pred) -> dict:
     precision, recall, f1, _ = precision_recall_fscore_support(
         y_true, y_pred, labels=LABELS, zero_division=0,
@@ -62,6 +53,7 @@ def _score(y_true, y_pred) -> dict:
     }
 
 
+# Accuracy from one random video-grouped train/test split
 def _holdout_accuracy(x, y, groups, *, train_size: float, seed: int) -> float:
     splitter = GroupShuffleSplit(n_splits=1, train_size=train_size, random_state=seed)
     train_idx, test_idx = next(splitter.split(x, y, groups))
@@ -71,6 +63,7 @@ def _holdout_accuracy(x, y, groups, *, train_size: float, seed: int) -> float:
     return accuracy_score(y.iloc[test_idx], pred)
 
 
+# Run all three evaluation methods and return their results
 def evaluate(training_csv: Path, *, holdout_train_size: float, n_folds: int, n_seeds: int) -> dict:
     data = pd.read_csv(training_csv)
     if LABEL_COLUMN not in data.columns:
@@ -83,7 +76,7 @@ def evaluate(training_csv: Path, *, holdout_train_size: float, n_folds: int, n_s
     y = data[LABEL_COLUMN]
     groups = data["video_id"]
 
-    # 1) Single video-grouped held-out split.
+    # Video-grouped held-out split
     splitter = GroupShuffleSplit(n_splits=1, train_size=holdout_train_size, random_state=RANDOM_STATE)
     train_idx, test_idx = next(splitter.split(x, y, groups))
     holdout_model = _new_model()
@@ -94,8 +87,7 @@ def evaluate(training_csv: Path, *, holdout_train_size: float, n_folds: int, n_s
     holdout_result["n_train_videos"] = int(groups.iloc[train_idx].nunique())
     holdout_result["n_test_videos"] = int(groups.iloc[test_idx].nunique())
 
-    # 2) Grouped k-fold cross-validation, pooled — more stable than one split
-    #    on a dataset this small (350 rows / 111 videos).
+    # Grouped k-fold cross-validation, pooled
     gkf = GroupKFold(n_splits=n_folds)
     pooled_true: list[str] = []
     pooled_pred: list[str] = []
@@ -115,12 +107,7 @@ def evaluate(training_csv: Path, *, holdout_train_size: float, n_folds: int, n_s
     cv_result["fold_accuracy_mean"] = sum(fold_accuracies) / len(fold_accuracies)
     cv_result["fold_accuracy_std"] = pd.Series(fold_accuracies).std()
 
-    # 3) Repeated single-split sensitivity check. A dataset this small (111
-    #    videos, uneven rows per video) makes ONE video-grouped split noisy
-    #    depending purely on which videos land in the held-out set — this
-    #    quantifies that noise so a single split isn't cited as if it were
-    #    stable. See it as justification for reporting (2) as the headline
-    #    number instead of (1).
+    # Repeated single-split sensitivity check
     seed_accuracies = [
         _holdout_accuracy(x, y, groups, train_size=holdout_train_size, seed=seed)
         for seed in range(n_seeds)
@@ -149,6 +136,7 @@ def evaluate(training_csv: Path, *, holdout_train_size: float, n_folds: int, n_s
     }
 
 
+# Print a human-readable summary of the evaluation results
 def _print_summary(results: dict) -> None:
     ds = results["dataset"]
     print(f"Dataset: {ds['n_rows']} rows / {ds['n_videos']} videos / {ds['n_features']} features")
@@ -183,6 +171,7 @@ def _print_summary(results: dict) -> None:
           "use the pooled cross-validation result above as the headline figure.")
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Evaluate the RandomForest punch classifier on a video-grouped split (read-only; "

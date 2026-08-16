@@ -5,6 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
+// Room database holding the sessions table
 @Database(
     entities = [SessionEntity::class],
     version = 2,
@@ -17,6 +18,7 @@ abstract class SessionDatabase : RoomDatabase() {
         @Volatile
         private var instance: SessionDatabase? = null
 
+        // Singleton database instance
         fun getInstance(context: Context): SessionDatabase {
             return instance ?: synchronized(this) {
                 instance ?: Room.databaseBuilder(
@@ -24,8 +26,7 @@ abstract class SessionDatabase : RoomDatabase() {
                     SessionDatabase::class.java,
                     "stryko_sessions.db",
                 )
-                    // No real migrations written yet at this stage - a schema bump just
-                    // recreates the table instead of crashing existing installs.
+                    // Destructive migration (no migrations written yet)
                     .fallbackToDestructiveMigration()
                     .build().also { instance = it }
             }

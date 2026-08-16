@@ -13,6 +13,7 @@ DEFAULT_SMOOTHING_MS = 1500
 POSE_FRAME_REQUIRED_COLUMNS = {"video_id", "timestamp_ms", "left_hip_x", "left_hip_z", "right_hip_x", "right_hip_z"}
 
 
+# Validate required columns are present
 def validate_pose_frames(pose_frames: pd.DataFrame) -> None:
     missing = POSE_FRAME_REQUIRED_COLUMNS - set(pose_frames.columns)
     if missing:
@@ -20,9 +21,7 @@ def validate_pose_frames(pose_frames: pd.DataFrame) -> None:
 
 
 def movement_for_window(window: pd.DataFrame) -> float:
-    """Mean frame-to-frame speed of the hip midpoint on x/z only (y excluded,
-    since vertical bob isn't footwork). Same shape as
-    build_training_csv.add_velocity_features, applied to the hip center."""
+    """Mean frame-to-frame hip midpoint speed (x/z only)."""
     hip_x = window[["left_hip_x", "right_hip_x"]].astype(float).mean(axis=1)
     hip_z = window[["left_hip_z", "right_hip_z"]].astype(float).mean(axis=1)
     deltas_seconds = window["timestamp_ms"].astype(float).diff() / 1000.0
@@ -40,9 +39,7 @@ def compute_movement(
     window_ms: int = DEFAULT_WINDOW_MS,
     stride_ms: int = DEFAULT_STRIDE_MS,
 ) -> pd.DataFrame:
-    """Movement (hip x/z speed) on a uniform sliding-window grid. Raw -
-    smoothing/downsampling for display is graph_metrics.py's job
-    (smooth_graph_metrics() / downsample_graph_metrics()), not this stage's."""
+    """Movement (hip x/z speed) on a uniform sliding-window grid."""
     if window_ms < 1:
         raise ValueError("window_ms must be at least 1.")
     if stride_ms < 1:
@@ -80,6 +77,7 @@ def compute_movement(
     return pd.DataFrame(rows, columns=["video_id", "start_ms", "end_ms", "center_ms", "movement"])
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Compute hip x/z movement speed on a uniform sliding-window grid.",

@@ -3,6 +3,7 @@ package com.breadler.boxingperformancetracker.data
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
+// Room row for one processed session
 @Entity(tableName = "sessions")
 data class SessionEntity(
     @PrimaryKey val id: String,

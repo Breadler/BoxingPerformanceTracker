@@ -17,9 +17,10 @@ import com.breadler.boxingperformancetracker.R
 import com.breadler.boxingperformancetracker.ui.theme.StrykoCard
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 
-/** Pixels of vertical drag needed to trigger one +/- step, besides the buttons themselves. */
+// Drag distance per +/- step
 private const val DRAG_PX_PER_STEP = 70f
 
+// Labeled timer value with +/- buttons and vertical drag adjustment
 @Composable
 fun TimerSection(
     title: String,

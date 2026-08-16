@@ -22,6 +22,7 @@ METADATA_COLUMNS = {
 }
 
 
+# Numeric columns that aren't metadata or the label
 def get_feature_columns(data: pd.DataFrame) -> list[str]:
     ignored_columns = {*METADATA_COLUMNS, LABEL_COLUMN}
     feature_columns = [
@@ -34,6 +35,7 @@ def get_feature_columns(data: pd.DataFrame) -> list[str]:
     return feature_columns
 
 
+# Train a RandomForest punch classifier on the training CSV
 def train_model(
     dataset_path: Path,
     *,
@@ -58,6 +60,7 @@ def train_model(
     return model, feature_columns, y.value_counts()
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(description="Train a Random Forest punch classifier.")
     parser.add_argument("--input", type=Path, required=True, help="Path to training.csv")
@@ -71,6 +74,7 @@ def main() -> None:
         n_estimators=args.n_estimators,
         random_state=args.random_state,
     )
+    # Save the model artifact
     args.output.parent.mkdir(parents=True, exist_ok=True)
     artifact = {
         "model": model,

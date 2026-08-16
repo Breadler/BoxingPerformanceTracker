@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.breadler.boxingperformancetracker.R
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 
+// Bold display font used for the "StryKO" wordmark
 @OptIn(ExperimentalTextApi::class)
 private val PlayfairDisplayBlack = FontFamily(
     Font(
@@ -31,6 +32,7 @@ private val PlayfairDisplayBlack = FontFamily(
     ),
 )
 
+// App logo mark + wordmark
 @Composable
 fun StrykoLogo(
     modifier: Modifier = Modifier,

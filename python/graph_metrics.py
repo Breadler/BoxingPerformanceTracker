@@ -22,11 +22,7 @@ def compute_graph_metrics(
     stride_ms: int = DEFAULT_STRIDE_MS,
     combo_gap_ms: int = DEFAULT_COMBO_GAP_MS,
 ) -> pd.DataFrame:
-    """The "graph generation" stage: runs the three independent metric stages -
-    punch_volume.compute_punch_volume(), guard_height.compute_guard_height(),
-    movement.compute_movement() - on the same uniform grid and merges them into
-    one row per window. Each stage file is otherwise unaware of the other two;
-    this is the only place that combines them."""
+    """Merge punch volume, guard height, and movement into one row per window."""
     punch_volume = compute_punch_volume(
         pose_frames,
         punch_windows,
@@ -51,9 +47,7 @@ def compute_graph_metrics(
 
 
 def smooth_series(values: pd.Series, *, window_samples: int) -> pd.Series:
-    """Centered rolling mean. Reduces window-to-window / frame-jitter noise
-    without shifting the signal in time (fine for offline/batch display;
-    a real-time consumer would need a trailing window instead)."""
+    """Centered rolling mean."""
     if window_samples <= 1:
         return values
     return values.rolling(window=window_samples, center=True, min_periods=1).mean()
@@ -66,12 +60,7 @@ def smooth_graph_metrics(
     guard_height_smoothing_ms: int = DEFAULT_GUARD_HEIGHT_SMOOTHING_MS,
     movement_smoothing_ms: int = DEFAULT_MOVEMENT_SMOOTHING_MS,
 ) -> pd.DataFrame:
-    """Returns a copy of [metrics] with guard_height/movement smoothed
-    independently, computed per video_id so smoothing never bleeds across
-    separate sessions. punch_volume is intentionally left untouched - see
-    punch_volume.compute_punch_volume()'s docstring for why. The raw
-    compute_graph_metrics() output is left untouched too - this is a
-    display-time step, not a change to the source data."""
+    """Smooth guard_height/movement per video_id."""
     if stride_ms < 1:
         raise ValueError("stride_ms must be at least 1.")
 
@@ -93,12 +82,7 @@ def smooth_graph_metrics(
 
 
 def downsample_graph_metrics(metrics: pd.DataFrame, *, bucket_ms: int) -> pd.DataFrame:
-    """Collapses guard_height/movement into bucket_ms-wide buckets (mean per
-    bucket, per video_id), so a display consumer sees far fewer points. Meant
-    to run after smooth_graph_metrics(): smooth first for a stable trend,
-    then downsample so each remaining point still reflects that trend rather
-    than one raw sample. punch_volume is dropped here on purpose - read it
-    from compute_graph_metrics()'s raw output instead."""
+    """Downsample guard_height/movement into time buckets."""
     if bucket_ms < 1:
         raise ValueError("bucket_ms must be at least 1.")
     if metrics.empty:
@@ -118,6 +102,7 @@ def downsample_graph_metrics(metrics: pd.DataFrame, *, bucket_ms: int) -> pd.Dat
     return downsampled[["video_id", "start_ms", "end_ms", "center_ms", "guard_height", "movement"]]
 
 
+# CLI entry point
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Graph generation stage: run punch-volume/guard-height/movement and merge them.",

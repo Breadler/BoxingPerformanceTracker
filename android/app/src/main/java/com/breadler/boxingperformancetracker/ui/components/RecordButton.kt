@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.breadler.boxingperformancetracker.ui.theme.StrykoRed
 import com.breadler.boxingperformancetracker.ui.theme.StrykoWhite
 
+// Circular record/stop button, shrinks its inner dot while active
 @Composable
 fun RecordButton(
     active: Boolean,
