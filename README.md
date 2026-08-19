@@ -15,7 +15,7 @@ The final RandomForest classifier reaches **69.4% held-out accuracy** and **0.69
 
 - `android/` – the Kotlin/Compose app. All inference (`data/processing/`) runs on-device; sessions persist locally in Room.
 - `python/` – dataset building, model training, and pipeline prototyping. Nothing here runs at app runtime; it's the offline workshop that produces the assets in `android/app/src/main/assets/` and lets you preview new metrics before porting them.
-- `thesis/` – the written thesis (chapters, notes, decisions log) documenting this project's design, implementation, and evaluation. Not part of the app or pipeline.
+
 
 ## Python setup
 
